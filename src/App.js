@@ -5,6 +5,7 @@ import { Card, Col, Row, Badge, Space, Progress } from "antd";
 import { getAllCotizacion } from "./apis/ApisServicioCliente/CotizacionApi";
 import { getAllCliente } from "./apis/ApisServicioCliente/ClienteApi";
 import { getAllEmpresas } from "./apis/ApisServicioCliente/EmpresaApi";
+import { getAllContarCotizaciones } from "./apis/ApisServicioCliente/contarcotizacionesAp";
 import {
   ReconciliationOutlined,
   SettingOutlined,
@@ -23,23 +24,29 @@ const App = () => {
   const [countCotizaciones, setCountCotizaciones] = useState(0);
   const [totalCotizaciones, setTotalCotizaciones] = useState(0);
   const [cotizacionesAceptadas, setCotizacionesAceptadas] = useState(0);
+  const [contarCotizaciones, setContarCotizaciones] = useState(0);
 
   useEffect(() => {
+    console.log(getAllContarCotizaciones);
     const fetchCount = async () => {
       try {
         // Obtén el ID de la organización del usuario desde localStorage
         const organizationId = parseInt(localStorage.getItem("organizacion_id"), 10);
 
         // Realiza las peticiones a las APIs: cotizaciones, clientes y empresas
-        const [cotResponse, clientesResponse, empresasResponse] = await Promise.all([
+        const [cotResponse, clientesResponse, empresasResponse, ContarCotizaciones] = await Promise.all([
           getAllCotizacion(),
           getAllCliente(),
           getAllEmpresas(),
+          getAllContarCotizaciones(),
         ]);
 
         const cotizaciones = cotResponse.data || [];
         const clientes = clientesResponse.data || [];
         const empresas = empresasResponse.data || [];
+        //const Cc=
+        //console.log(ContarCotizaciones.data);
+        setContarCotizaciones(ContarCotizaciones.data);
 
         // Filtrar las empresas que pertenecen a la organización actual
         const filteredEmpresas = empresas.filter(
@@ -75,24 +82,17 @@ const App = () => {
     fetchCount();
   }, []);
 
-  // Calcula el porcentaje para la progress bar
-  let porcentaje = 0;
-  if (totalCotizaciones > 0) {
-    porcentaje = (cotizacionesAceptadas / totalCotizaciones) * 100;
-  }
-  const porcentajeFinal = parseFloat(porcentaje.toFixed(2));
-
   return (
     <div className="App">
       {/* Contenedor para la barra de progreso */}
       <div className="justi-card">
         <Card className="custom-card-bar">
           <div className="progress-bar-container">
-            <Progress percent={porcentajeFinal} status="active" />
+            <Progress percent={(contarCotizaciones.cotizacionesnoaceptadas / contarCotizaciones.cotizacionestotales) * 100} status="active" />
           </div>
           <div className="text-container">
-            <p>Total de cotizaciones: {totalCotizaciones}</p>
-            <p>Cotizaciones Aceptadas: {cotizacionesAceptadas}</p>
+            <p>Total de cotizaciones: {contarCotizaciones.cotizacionesnoaceptadas}</p>
+            <p>Cotizaciones Aceptadas: {contarCotizaciones.cotizacionestotales}</p>
           </div>
         </Card>
       </div>

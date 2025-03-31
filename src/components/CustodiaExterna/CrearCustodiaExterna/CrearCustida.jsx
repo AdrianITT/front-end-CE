@@ -18,10 +18,11 @@ import {
   ConfigProvider,
   Radio
 } from 'antd';
+import moment from "moment";
 import { useParams, useNavigate } from "react-router-dom";
 import { CheckOutlined, CloseOutlined,DownOutlined } from '@ant-design/icons';
-import { createCustodiaExterna } from '../../../apis/ApiCustodiaExterna/ApiCustodiaExtern';
-import { createMuestra } from '../../../apis/ApiCustodiaExterna/ApiMuestra';
+import { createCustodiaExterna, getCustodiaExternaById } from '../../../apis/ApiCustodiaExterna/ApiCustodiaExtern';
+import { createMuestra, getMuestraById } from '../../../apis/ApiCustodiaExterna/ApiMuestra';
 import { createpreservadormuestra } from '../../../apis/ApiCustodiaExterna/ApiPreservadorMuestra';
 import { getAllOrdenesTrabajo } from '../../../apis/ApisServicioCliente/OrdenTrabajoApi';
 import { getAllPrioridad } from '../../../apis/ApiCustodiaExterna/ApiPrioridad';
@@ -30,8 +31,7 @@ import { getAllPreservador } from '../../../apis/ApiCustodiaExterna/ApiPreservad
 import { getAllMatriz } from '../../../apis/ApiCustodiaExterna/ApiMatriz';
 import { getAllClave } from '../../../apis/ApiCustodiaExterna/ApiClave';
 import { getAllParametro } from '../../../apis/ApiCustodiaExterna/ApiParametros';
-import {getCotizacionById} from '../../../apis/ApisServicioCliente/CotizacionApi';
-import {getClienteById} from '../../../apis/ApisServicioCliente/ClienteApi';
+import { getAlldataordentrabajo } from '../../../apis/ApisServicioCliente/DataordentrabajoApi';
 
 const { Title } = Typography;
 const { Panel } = Collapse;
@@ -46,7 +46,7 @@ const CrearCustodiaExterna = () => {
   const [activeKey, setActiveKey] = useState([0]);
   const [ordenSeleccionada, setOrdenSeleccionada] = useState(null);
   const MAX_PRESERVADORES = 3;
-  const modificar=Form.useWatch("modificar", form);
+  const modificacionOrdenTrabajo=Form.useWatch("modificacionOrdenTrabajo", form);
   const [ordenesTrabajo, setOrdenesTrabajo] = useState([]);
   const [prioridades, setPrioridades] = useState([]);
   const [contenedores, setContenedores] = useState([]);
@@ -55,40 +55,77 @@ const CrearCustodiaExterna = () => {
   const [matrices, setMatrices] = useState([]);
   const [parametros, setParametros] = useState([]);
   const [tipoMuestras, setTipoMuestra] = useState(null);
-  const [DataClientes, setDataClientes]=useState([]);
+  const [dataOrdenTrabajo, setDataOrdenTrabajo] = useState(null);
+  const [muestras, setMuestras] = useState([]);
   // Al seleccionar la orden:
   //const ordenSeleccionadaData = ordenesTrabajo.find(orden => orden.id === ordenSeleccionada);
   //const cotizacionId = ordenSeleccionadaData.cotizacionId;
-
   useEffect(() => {
-    if (!ordenSeleccionada) return; // No hacer nada si no se ha seleccionado una orden
-  
-    // Buscar la orden seleccionada en el estado
-    const orden = ordenesTrabajo.find(o => o.id === ordenSeleccionada);
-    console.log('orden:', orden);
-    console.log('orden.cotizacion:', orden.cotizacion);
-    if (!orden || !orden.cotizacion) return; // Verificar que la orden tenga el ID de cotización
-    // Obtener la cotización relacionada
-    getCotizacionById(orden.cotizacion)//solo quiero el id del cliente y unificar en caso de que se repetido
-    .then(res => {
-        console.log('res: ', res);
-        const cotizacion = res.data;
-          // Retornar la llamada a la API para obtener los datos del cliente
-          console.log('cotizacion.cliente.id:', cotizacion.cliente);
-          return getClienteById(cotizacion.cliente);
+    if (id) {  // id es la custodiaExterna ID
+      getMuestraById(id)
+      .then((res) => {
+        console.log("res.data: ",res.data);
+        const data = res.data;
+        // Convertir fechas a moment
+        data.fechaMuestreo = data.fechaMuestreo
+          ? moment(data.fechaMuestreo, "YYYY-MM-DD")
+          : null;
+        data.horaMuestreo = data.horaMuestreo
+          ? moment(data.horaMuestreo, "HH:mm:ss")
+          : null;
+    
+        // Precarga el formulario con un solo objeto
+        // (si tu form usa 'bitacoras[0]', lo pones dentro de un array)
+        form.setFieldsValue({ bitacoras: [data] });
+        setBitacoras([0]);
       })
-      .then(res => {
-        // Actualizar el estado con los datos del cliente
-        setDataClientes(res.data);
-        console.log('res.data:', res.data);
-      })
-      .catch(err => console.error("Error al obtener la cotización o cliente:", err));
-  }, [ordenSeleccionada, ordenesTrabajo]);
+      .catch((err) => console.error("Error al obtener muestras:", err));
+    
+    }
+  }, [id, form]);
   
-
-
-
-
+  
+  useEffect(() => {
+    if (id) {
+      getCustodiaExternaById(id)
+        .then((res) => {
+          const data = res.data;
+          console.log("Custodia Externa: ",res.data);
+          // Si hay campos de fecha/hora, conviértelos a objetos moment()
+          if (data.fechaFinal) {
+            data.fechaFinal = moment(data.fechaFinal, "YYYY-MM-DD");
+          }
+          if (data.horaFinal) {
+            data.horaFinal = moment(data.horaFinal, "HH:mm:ss");
+          }
+          // Precarga el formulario
+          form.setFieldsValue({
+            ...data,
+            // Si tu data tiene un nombre de propiedad diferente para ordenTrabajo, ajústalo
+            ordenTrabajo: data.ordenTrabajo,
+            // Si usas tipoMuestra, por ejemplo:
+            // tipoMuestra: data.tipoMuestra,
+          });
+          // Si necesitas actualizar estados locales, hazlo:
+          setOrdenSeleccionada(data.ordenTrabajo);
+          // setTipoMuestra(data.tipoMuestra);
+        })
+        .catch((err) => console.error("Error al obtener custodia externa:", err));
+    }
+  }, [id, form]);
+  
+  useEffect(() => {
+    if (!ordenSeleccionada) return; // No hacemos nada si no hay orden seleccionada
+  
+    getAlldataordentrabajo(ordenSeleccionada)
+      .then((res) => {
+        // Aquí obtienes la información de la OT, cliente, etc.
+        console.log("Datos de getAlldataordentrabajo:", res.data);
+        // Guarda la data en el estado
+        setDataOrdenTrabajo(res.data);
+      })
+      .catch((err) => console.error("Error al obtener datos de OT:", err));
+  }, [ordenSeleccionada]);
   useEffect(() => {
     getAllOrdenesTrabajo()
       .then((res) => {
@@ -129,6 +166,8 @@ const CrearCustodiaExterna = () => {
       .catch(err => console.error("Error al obtener matrices:", err));
   }, []);
   
+  
+  
 
   const handleAddBitacora = () => {
      const newIndex = bitacoras.length;
@@ -138,20 +177,20 @@ const CrearCustodiaExterna = () => {
 
   const handleFinish = async(values) => {
     try {
-      const tipoSeleccionado = values.tipoMuestra?.[0] || null;
       // 1. Crear la custodia externa
       const custodiaPayload = {
         contacto: values.contacto || "sin contacto",
-        puntosMuestreoAutorizados: values.puntosMuestreo || "0",
-        modificacionOrdenTrabajo: values.modificar || false,
-        observacionesModificacion: values.MoSolicitada || "",
-        muestreoRequerido: values.requerido,
+        puntosMuestreoAutorizados: values.puntosMuestreoAutorizados || "0",
+        modificacionOrdenTrabajo: values.modificacionOrdenTrabajo || false,
+        observacionesModificacion: values.observacionesModificacion || "",
+        muestreoRequerido: values.muestreoRequerido,
         fechaFinal: values.fechaFinal ? values.fechaFinal.format("YYYY-MM-DD") : null,
-        horaFinal: values.HoraFinal ? values.HoraFinal.format("HH:mm:ss") : null,
+        horaFinal: values.horaFinal ? values.horaFinal.format("HH:mm:ss") : null,
         observaciones: values.observaciones,
         prioridad: values.prioridad,
         receptor: 2, // o puedes hacer esto dinámico si lo necesitas
         ordenTrabajo: values.ordenTrabajo,
+        asesoriaGestionAmbiental:values.asesoriaGestionAmbiental,
       };
       console.log("Payload de custodia externa:", custodiaPayload);
   
@@ -173,7 +212,7 @@ const CrearCustodiaExterna = () => {
           idLaboratorio: null,
           filtro: null,
           matriz: bitacora.matriz,
-          contenedor: bitacora.contenedores,
+          contenedor: bitacora.contenedor,
           tipoMuestra: tipoMuestras||null, // si usas `Puntual` o `Compuesta` aquí puedes cambiarlo
           parametro: bitacora.metodo,
           custodiaExterna: custodiaId,
@@ -201,25 +240,13 @@ const CrearCustodiaExterna = () => {
   };
 
 
-   const prefixSelector = (
-    <Form.Item name="prefix" noStyle >
-      <Select style={{ width: 90 }}>
-        {claves.map((item) => (
-          <Option key={item.id} value={item.codigo}>
-            {item.codigo}
-          </Option>
-        ))}
-      </Select>
-    </Form.Item>
-  );
-
    
    const renderBitacoraPanel = (index) => (
-    <Panel header={`Bitácoras del parámetro ${index + 1}`} key={index}>
+    <Panel header={`Muestras del parámetro ${index + 1}`} key={index}>
       <Row gutter={[16, 16]}>
         {/* MÉTODO */}
         <Col span={8}>
-          <Form.Item label="Método" name={['bitacoras', index, 'metodo']}>
+          <Form.Item label="Método" name={['bitacoras', index, 'parametro']}>
             <Select placeholder="Selecciona método">
               {parametros.map((item)=>(
                 <Option key={item.id} value={item.id}>
@@ -232,7 +259,7 @@ const CrearCustodiaExterna = () => {
   
         {/* CONTENEDOR */}
         <Col span={8}>
-          <Form.Item label="Contenedor" name={['bitacoras', index, 'contenedores']}>
+          <Form.Item label="Contenedor" name={['bitacoras', index, 'contenedor']}>
           <Select placeholder="Selecciona contenedor">
             {contenedores.map((item) => (
               <Option key={item.id} value={item.id}>
@@ -266,14 +293,8 @@ const CrearCustodiaExterna = () => {
         <Col span={8}>
           <Form.Item label="Identificación de campo"
           rules={[{ required: true, message: 'Ingresa identificador de campo' }]}
-          name={['bitacoras', index, 'IdCampo']}>
-                <Input placeholder="Clave" 
-                addonBefore={prefixSelector}
-                style={{textTransform:'uppercase'}}
-                onChange={(e) => {
-                  const value = e.target.value.toUpperCase();
-                  form.setFieldValue(['bitacoras', index, 'IdCampo'], value);
-                }}/>
+          name={['bitacoras', index, 'identificacionCampo']}>
+            <Input/>
           </Form.Item>
         </Col>
 
@@ -293,21 +314,21 @@ const CrearCustodiaExterna = () => {
   
         {/* VOLUMEN / CANTIDAD */}
         <Col span={8}>
-          <Form.Item label="Volumen / cantidad" name={['bitacoras', index, 'volumen']}>
+          <Form.Item label="Volumen / cantidad" name={['bitacoras', index, 'volumenCantidad']}>
             <Input placeholder="Ej. 500 ml" />
           </Form.Item>
         </Col>
   
         {/* ID FILTRO */}
         <Col span={8}>
-          <Form.Item label="ID Filtro" name={['bitacoras', index, 'idFiltro']}>
+          <Form.Item label="ID Filtro" name={['bitacoras', index, 'filtro']}>
             <Input placeholder="Ej. F123" />
           </Form.Item>
         </Col>
   
         {/* ORIGEN DE LA MUESTRA */}
         <Col span={8}>
-          <Form.Item label="Origen de la muestra" name={['bitacoras', index, 'origen']}>
+          <Form.Item label="Origen de la muestra" name={['bitacoras', index, 'origenMuestra']}>
           <Input placeholder="Origen de la muestra" />
           </Form.Item>
         </Col>
@@ -317,7 +338,7 @@ const CrearCustodiaExterna = () => {
           <Form.Item label="Fecha de muestreo y hora" name={['bitacoras', index, 'fechaMuestreo']}>
             <DatePicker />
           </Form.Item>
-          <Form.Item label="Fecha de muestreo y hora" name={['bitacoras', index, 'HoraMuestreo']}>
+          <Form.Item label="Fecha de muestreo y hora" name={['bitacoras', index, 'horaMuestreo']}>
             <TimePicker />
           </Form.Item>
         </Col>
@@ -409,7 +430,7 @@ const CrearCustodiaExterna = () => {
                onFinish={handleFinish}
                style={{ maxWidth: 900 }}
                initialValues={{
-                modificar:false,
+                modificacionOrdenTrabajo:false,
                 asesoria:false,
                }}
                >
@@ -430,28 +451,65 @@ const CrearCustodiaExterna = () => {
                     ))}
                   </Select>
                 </Form.Item>
-                {ordenSeleccionada && (
+                {ordenSeleccionada && dataOrdenTrabajo && (
                   <Card title="Datos del cliente" style={{ marginBottom: 17 }}>
                     <Descriptions column={1}>
-                      <Descriptions.Item label="Nombre">{DataClientes.nombrePila}</Descriptions.Item>
-                      <Descriptions.Item label="Apellido">{DataClientes.apPaterno}</Descriptions.Item>
-                      <Descriptions.Item label="Dirección">{DataClientes.codigoPostalCliente} {DataClientes.ciudadCliente} {DataClientes.estadoCliente} {DataClientes.coloniaCliente} {DataClientes.numeroCliente} {DataClientes.calleCliente}</Descriptions.Item>
-                      <Descriptions.Item label="Correo">{DataClientes.correo}</Descriptions.Item>
+
+                      {/* Nombre Completo */}
+                      <Descriptions.Item label="Nombre">
+                        {dataOrdenTrabajo.Cliente["Nombre Completo"]}
+                      </Descriptions.Item>
+
+                      {/* Teléfono o Celular */}
+                      <Descriptions.Item label="Teléfono">
+                        {dataOrdenTrabajo.Cliente.Teléfono}
+                      </Descriptions.Item>
+
+                      {/* Dirección: concatenamos los campos dentro de dataOrdenTrabajo.Cliente.Dirección */}
+                      <Descriptions.Item label="Dirección">
+                        {dataOrdenTrabajo.Cliente.Dirección.Calle}{" "}
+                        {dataOrdenTrabajo.Cliente.Dirección.Numero},{" "}
+                        {dataOrdenTrabajo.Cliente.Dirección.Colonia},{" "}
+                        {dataOrdenTrabajo.Cliente.Dirección.Ciudad},{" "}
+                        {dataOrdenTrabajo.Cliente.Dirección.Estado}
+                      </Descriptions.Item>
+
+                      {/* Correo */}
+                      <Descriptions.Item label="Correo">
+                        {dataOrdenTrabajo.Cliente.Correo}
+                      </Descriptions.Item>
+
                     </Descriptions>
                   </Card>
                 )}
-
                <Row gutter={16}>
-                <Col span={8}>
+               <Col span={8}>
                   <Form.Item
-                    label="Puntos de muestreo autorizados"
-                    name="puntosMuestreo"
+                    label="Contacto: "
+                    name="contacto"
+                    rules={[{ required: true, message: 'Ingresa el Contacto' }]}
                   >
                     <Input />
                   </Form.Item>
                 </Col>
                 <Col span={8}>
-                  <Form.Item name="modificar" valuePropName="checked"
+                  <Form.Item
+                    label="Puesto/Cargo: "
+                    name="PuestoCargo"
+                  >
+                    <Input />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item
+                    label="Puntos de muestreo autorizados"
+                    name="puntosMuestreoAutorizados"
+                  >
+                    <Input />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item name="modificacionOrdenTrabajo" valuePropName="checked"
                   label="¿El Cliente solicita modificación a la OT?">
                     <Switch
                       checkedChildren={<CheckOutlined />}
@@ -459,11 +517,11 @@ const CrearCustodiaExterna = () => {
                     />
                   </Form.Item>
                 </Col>
-                {modificar && (
+                {modificacionOrdenTrabajo&& (
                 <Col span={8}>
                   <Form.Item
                       label="Modificacion solicitada:"
-                      name="MoSolicitada"
+                      name="muestreoRequerido"
                     >
                       <Input />
                   </Form.Item>
@@ -473,7 +531,7 @@ const CrearCustodiaExterna = () => {
                 <Col span={8}>
                   <Form.Item
                       label="Muestro requerido por:"
-                      name="requerido"
+                      name="observacionesModificacion"
                     >
                       <Input />
                   </Form.Item>
@@ -482,8 +540,8 @@ const CrearCustodiaExterna = () => {
                   <Form.Item label="Fecha de muestreo y hora" name='fechaFinal'>
                     <DatePicker name='fechaMuestra'/>
                   </Form.Item>
-                  <Form.Item label="Fecha de muestreo y hora" name='HoraFinal'> 
-                    <TimePicker name='HoraMuestra'/>
+                  <Form.Item label="Fecha de muestreo y hora" name='horaFinal'> 
+                    <TimePicker name='horaMuestra'/>
                   </Form.Item>
                 </Col>
 
@@ -499,18 +557,7 @@ const CrearCustodiaExterna = () => {
                     ))}
                   </Select>
                   </Form.Item>
-                </Col>{/*
-                <Col span={8}>
-                  <Form.Item
-                    label="Muestra compuesta o puntual"
-                    name="tipoMuestra"
-                  >
-                    <Select placeholder="Selecciona tipo de muestra">
-                      <Option value="Compuesta">Compuesta</Option>
-                      <Option value="Puntual">Puntual</Option>
-                    </Select>
-                  </Form.Item>
-                </Col> */}
+                </Col>
                </Row>
 
                <Form.Item>
@@ -529,13 +576,13 @@ const CrearCustodiaExterna = () => {
                 </Col>
                 <Col>
                   <Form.Item label="Observaciones" name="observaciones">
-                      <Input.TextArea showCount maxLength={132} />
+                      <Input.TextArea showCount maxLength={120} />
                   </Form.Item>
                 </Col>
                     
                 <Row gutter={16} style={{ marginBottom: 16 }}>
                   <Col span={24}>
-                    <Form.Item name="asesoria" valuePropName="checked"
+                    <Form.Item name="asesoriaGestionAmbiental" valuePropName="checked"
                     label="¿El Cliente solicita asesoría/gestión ambiental?">
 
                         <Switch
@@ -572,10 +619,10 @@ const CrearCustodiaExterna = () => {
                   <Row gutter={16}>
                     <Col span={24}>
                     <Form.Item label="Tipo de muestra" name="tipoMuestra">
-                      <Radio.Group onChange={(e) => setTipoMuestra(e.target.value)}>
-                        <Radio value={2}>Muestra Compuesta</Radio>
-                        <Radio value={1}>Muestra Puntual</Radio>
-                      </Radio.Group>
+                    <Checkbox.Group onChange={(checkedValues) => setTipoMuestra(checkedValues[0])}>
+                      <Checkbox value={2}>Muestra Compuesta</Checkbox>
+                      <Checkbox value={1}>Muestra Puntual</Checkbox>
+                    </Checkbox.Group>
                     </Form.Item>
 
                       {tipoMuestras === 2 && (
@@ -588,20 +635,7 @@ const CrearCustodiaExterna = () => {
                         <Form.Item label="ID Puntual" name="idPuntual" rules={[{ required: true, message: 'Ingresa el ID de la muestra puntual' }]}>
                           <Input />
                         </Form.Item>
-                      )}{/* 
-                      <Form.Item name="Compuesta" valuePropName="checked">
-                        <Checkbox value={1}>Muestra Compuesta</Checkbox>
-                      </Form.Item>
-                      <Form.Item label="id:" name="idCompuesta">
-                        <Input />
-                      </Form.Item>
-                      <Form.Item name="Puntual" valuePropName="checked">
-                        <Checkbox value={2}>Muestra Puntual</Checkbox>
-                      </Form.Item>
-                      <Form.Item label="id:" name="idPuntual">
-                        <Input />
-                      </Form.Item>
-                      */}
+                      )}
                     </Col>
                   </Row>
                 </Card>
