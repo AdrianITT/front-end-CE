@@ -1,1 +1,0 @@
-//en esta vista se tiene pensado mostrar el logo de la organización

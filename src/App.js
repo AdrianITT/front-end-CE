@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import "./index.css";
+//import "./index.css";
+import "./App.css";
 import { Card, Col, Row, Badge, Space, Progress } from "antd";
-import { getAllCotizacion } from "./apis/CotizacionApi";
-import { getAllCliente } from "./apis/ClienteApi";
-import { getAllEmpresas } from "./apis/EmpresaApi";
-
+import { getAllCotizacion } from "./apis/ApisServicioCliente/CotizacionApi";
+import { getAllCliente } from "./apis/ApisServicioCliente/ClienteApi";
+import { getAllEmpresas } from "./apis/ApisServicioCliente/EmpresaApi";
 import {
   ReconciliationOutlined,
   SettingOutlined,
@@ -15,19 +15,18 @@ import {
   UsergroupAddOutlined,
   EditOutlined,
   ThunderboltTwoTone,
+  DollarTwoTone,
 } from "@ant-design/icons";
 import { Link } from "react-router-dom";
-
+//prueba
 const App = () => {
   const [countCotizaciones, setCountCotizaciones] = useState(0);
-  // Para progress bar y textos
   const [totalCotizaciones, setTotalCotizaciones] = useState(0);
   const [cotizacionesAceptadas, setCotizacionesAceptadas] = useState(0);
 
   useEffect(() => {
     const fetchCount = async () => {
       try {
-        console.log("Obteniendo cotizaciones...");
         // Obtén el ID de la organización del usuario desde localStorage
         const organizationId = parseInt(localStorage.getItem("organizacion_id"), 10);
 
@@ -57,7 +56,6 @@ const App = () => {
           filteredClientes.some((cliente) => cliente.id === cotizacion.cliente)
         );
 
-        // Ahora se aplican los filtros sobre los estados:
         // 1. Cotizaciones con estado = 1
         const estadoUno = filteredCotizaciones.filter((cot) => cot.estado === 1);
         setCountCotizaciones(estadoUno.length);
@@ -86,8 +84,8 @@ const App = () => {
 
   return (
     <div className="App">
+      {/* Contenedor para la barra de progreso */}
       <div className="justi-card">
-        {/* Barra de carga */}
         <Card className="custom-card-bar">
           <div className="progress-bar-container">
             <Progress percent={porcentajeFinal} status="active" />
@@ -98,120 +96,112 @@ const App = () => {
           </div>
         </Card>
       </div>
-      {/* Opciones de navegación */}
-      <div className="contencenter">
+      {/* Contenedor centrado para las tarjetas de navegación */}
+      <div className="content-center">
         <br />
-        <Space>
-          <Row gutter={[24, 24]} justify="center">
+        <Space size={0}>
+          <Row gutter={[0, 0]} justify="center">
             <Col xs={24} sm={12} md={8} lg={6} xl={4} className="col-style">
-              <div>
-                <Link to="/empresa">
-                  <Card className="card-custom" title="Empresa" bordered={false}>
-                    <div className="icon-container">
-                      <ShopFilled />
-                    </div>
-                  </Card>
-                </Link>
-              </div>
+              <Link to="/empresa">
+                <Card className="card-custom" title="Empresas" bordered={false}>
+                  <div className="icon-container">
+                    <ShopFilled />
+                  </div>
+                </Card>
+              </Link>
             </Col>
             <Col xs={24} sm={12} md={8} lg={6} xl={4} className="col-style">
-              <div>
-                <Link to="/cliente">
-                  <Card className="card-custom" title="Cliente" bordered={false}>
-                    <div className="icon-container">
-                      <UserAddOutlined />
-                    </div>
-                  </Card>
-                </Link>
-              </div>
+              <Link to="/cliente">
+                <Card className="card-custom" title="Clientes" bordered={false}>
+                  <div className="icon-container">
+                    <UserAddOutlined />
+                  </div>
+                </Card>
+              </Link>
             </Col>
             <Col xs={24} sm={12} md={8} lg={6} xl={4} className="col-style">
-              <div>
-                <Link to="/servicio">
-                  <Card className="card-custom" title="Servicio" bordered={false}>
-                    <div className="icon-container">
-                      <ClearOutlined />
-                    </div>
-                  </Card>
-                </Link>
-              </div>
+              <Link to="/servicio">
+                <Card className="card-custom" title="Servicios" bordered={false}>
+                  <div className="icon-container">
+                    <ClearOutlined />
+                  </div>
+                </Card>
+              </Link>
             </Col>
             <Col xs={24} sm={12} md={8} lg={6} xl={4} className="col-style">
-              <div>
-                <Link to="/cotizar">
-                  <Card className="card-custom" title="Cotizar" bordered={false}>
-                    <div className="badge-container">
-                      <Badge count={countCotizaciones} />
-                    </div>
-                    <div className="icon-container">
-                      <EditOutlined />
-                    </div>
-                  </Card>
-                </Link>
-              </div>
+              <Link to="/cotizar">
+                <Card className="card-custom" title="Cotizaciones" bordered={false}>
+                  <div className="badge-container">
+                    <Badge count={countCotizaciones} />
+                  </div>
+                  <div className="icon-container">
+                    <EditOutlined />
+                  </div>
+                </Card>
+              </Link>
             </Col>
             <Col xs={24} sm={12} md={8} lg={6} xl={4} className="col-style">
-              <div>
-                <Link to="/generar_orden">
-                  <Card
-                    className="card-custom"
-                    title="Generar Orden de Trabajo"
-                    bordered={false}
-                  >
-                    <div className="icon-container">
-                      <ReconciliationOutlined />
-                    </div>
-                  </Card>
-                </Link>
-              </div>
+              <Link to="/generar_orden">
+                <Card className="card-custom" title="Ordenes de Trabajo" bordered={false}>
+                  <div className="icon-container">
+                    <ReconciliationOutlined />
+                  </div>
+                </Card>
+              </Link>
             </Col>
             <Col xs={24} sm={12} md={8} lg={6} xl={4} className="col-style">
-              <div>
-                <Link to="/usuario">
-                  <Card className="card-custom" title="Usuario" bordered={false}>
-                    <div className="icon-container">
-                      <UsergroupAddOutlined />
-                    </div>
-                  </Card>
-                </Link>
-              </div>
+              <Link to="/usuario">
+                <Card className="card-custom" title="Usuarios" bordered={false}>
+                  <div className="icon-container">
+                    <UsergroupAddOutlined />
+                  </div>
+                </Card>
+              </Link>
             </Col>
             <Col xs={24} sm={12} md={8} lg={6} xl={4} className="col-style">
-              <div>
-                <Link to="/configuracionorganizacion">
-                  <Card
-                    className="card-custom"
-                    title="Configuración de la organización"
-                    bordered={false}
-                  >
-                    <div className="icon-container">
-                      <SettingOutlined />
-                    </div>
-                  </Card>
-                </Link>
-              </div>
+              <Link to="/configuracionorganizacion">
+                <Card
+                  className="card-custom"
+                  title="Configuración"
+                  bordered={false}
+                  headStyle={{
+                    whiteSpace: "normal",
+                    overflow: "visible",
+                    textOverflow: "clip",
+                  }}
+                >
+                  <div className="icon-container">
+                    <SettingOutlined />
+                  </div>
+                </Card>
+              </Link>
             </Col>
             <Col xs={24} sm={12} md={8} lg={6} xl={4} className="col-style">
-              <div>
-                <Link to="/factura">
-                  <Card className="card-custom" title="Facturas" bordered={false}>
-                    <div className="icon-container">
-                      <AuditOutlined />
-                    </div>
-                  </Card>
-                </Link>
-              </div>
+              <Link to="/factura">
+                <Card className="card-custom" title="Facturas" bordered={false}>
+                  <div className="icon-container">
+                    <AuditOutlined />
+                  </div>
+                </Card>
+              </Link>
             </Col>
             <Col xs={24} sm={12} md={8} lg={6} xl={4} className="col-style">
-              <div>
-                <Link to="/Pre-Cotizacion">
-                  <Card className="card-custom" title="Pre-Cotizacion" bordered={false}>
-                    <div className="icon-container">
+              <Link to="/preCotizacion">
+                <Card className="card-custom" title="Pre-Cotizaciones" bordered={false}>
+                  <div className="icon-container">
                     <ThunderboltTwoTone />
-                    </div>
-                  </Card>
-                </Link>
-              </div>
+                  </div>
+                </Card>
+              </Link>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6} xl={4} className="col-style">
+              <Link to="/Pagos">
+                <Card className="card-custom" title="Pagos" bordered={false}>
+                  <div className="icon-container">
+                    <DollarTwoTone />
+                  </div>
+                </Card>
+              </Link>
             </Col>
           </Row>
         </Space>
