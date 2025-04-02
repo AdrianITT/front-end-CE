@@ -5,7 +5,7 @@ import { Card, Col, Row, Badge, Space, Progress } from "antd";
 import { getAllCotizacion } from "./apis/ApisServicioCliente/CotizacionApi";
 import { getAllCliente } from "./apis/ApisServicioCliente/ClienteApi";
 import { getAllEmpresas } from "./apis/ApisServicioCliente/EmpresaApi";
-import { getAllContarCotizaciones } from "./apis/ApisServicioCliente/contarcotizacionesAp";
+import { getAllContarCotizaciones } from "./apis/ApisServicioCliente/contarcotizacionesApi";
 import {
   ReconciliationOutlined,
   SettingOutlined,
@@ -22,12 +22,12 @@ import { Link } from "react-router-dom";
 //prueba
 const App = () => {
   const [countCotizaciones, setCountCotizaciones] = useState(0);
-  const [totalCotizaciones, setTotalCotizaciones] = useState(0);
-  const [cotizacionesAceptadas, setCotizacionesAceptadas] = useState(0);
+  //const [totalCotizaciones, setTotalCotizaciones] = useState(0);
+  //const [cotizacionesAceptadas, setCotizacionesAceptadas] = useState(0);
   const [contarCotizaciones, setContarCotizaciones] = useState(0);
 
   useEffect(() => {
-    console.log(getAllContarCotizaciones);
+
     const fetchCount = async () => {
       try {
         // Obtén el ID de la organización del usuario desde localStorage
@@ -69,11 +69,11 @@ const App = () => {
 
         // 2. Total de cotizaciones filtradas
         const total = filteredCotizaciones.length;
-        setTotalCotizaciones(total);
+        //setTotalCotizaciones(total);
 
         // 3. Cotizaciones aceptadas (estado >= 2)
         const aceptadas = filteredCotizaciones.filter((cot) => cot.estado >= 2).length;
-        setCotizacionesAceptadas(aceptadas);
+        //setCotizacionesAceptadas(aceptadas);
       } catch (error) {
         console.error("Error al obtener las cotizaciones", error);
       }

@@ -1,76 +1,103 @@
-import React, {useEffect, useState} from 'react';
+import React, { useEffect, useState } from 'react';
 import { Table, Button, Typography, Row, Col } from 'antd';
 import { Link } from "react-router-dom";
 import { getAllCustodiaExterna } from '../../apis/ApiCustodiaExterna/ApiCustodiaExtern';
-import { getAllPrioridad } from '../../apis/ApiCustodiaExterna/ApiPrioridad';
 
 const { Title } = Typography;
 
 const CustodiasExterna = () => {
-  const [custodias, setCustodias] = useState([]);
-  const [prioridades, setPrioridades] = useState([]);
+  const [dataSource, setDataSource] = useState([]);
+
   useEffect(() => {
     getAllCustodiaExterna()
-      .then((response) => {
-        console.log("Datos:", response.data);
-        setCustodias(response.data);
+      .then((res) => {
+        console.log("Datos recibidos:", res.data);
+        setDataSource(res.data);
       })
-      .catch((error) => {
-        console.error("Error al obtener custodias:", error);
-      });
-          // 2. Cargar prioridades
-    getAllPrioridad().then(res => {
-      setPrioridades(res.data); // [{ id:1, codigo:'A', descripcion:'(15) Días hábiles'}, ...]
-    });
+      .catch((err) => console.error("Error al obtener datos:", err));
   }, []);
 
-    // Crear el array de filtros para prioridad
-  // (texto = "A - (15) Días hábiles", value = ID)
-  const priorityFilters = prioridades.map((p) => ({
-    text: `${p.codigo} - ${p.descripcion}`,
-    value: p.id,
+  // Función para obtener valores únicos a partir de una ruta de propiedades
+  const getUniqueValues = (data, path) => {
+    const values = data.map((item) => {
+      return path.reduce((acc, curr) => acc && acc[curr], item);
+    }).filter((v) => v != null);
+    return [...new Set(values)];
+  };
+
+  // Creamos filtros dinámicos para cada columna
+  const fechaFinalFilters = getUniqueValues(dataSource, ['custodiaExterna', 'fechaFinal']).map(v => ({
+    text: v,
+    value: v,
+  }));
+  const codigoOTFilters = getUniqueValues(dataSource, ['ordenTrabajo', 'codigo']).map(v => ({
+    text: v,
+    value: v,
+  }));
+  const empresaFilters = getUniqueValues(dataSource, ['empresa', 'nombre']).map(v => ({
+    text: v,
+    value: v,
+  }));
+  const prioridadFilters = getUniqueValues(dataSource, ['prioridad', 'codigo']).map(v => ({
+    text: v,
+    value: v,
+  }));
+  const estadoFilters = getUniqueValues(dataSource, ['estado', 'descripcion']).map(v => ({
+    text: v,
+    value: v,
   }));
 
   const columns = [
     {
-      title: 'Contacto',
-      dataIndex: 'contacto',
-      key: 'contacto',
+      title: 'Código OT',
+      dataIndex: ['ordenTrabajo', 'codigo'],
+      key: 'codigoOT',
+      filters: codigoOTFilters,
+      filterSearch: true, // Permite buscar en el menú de filtros
+      onFilter: (value, record) =>
+        record.ordenTrabajo.codigo === value,
+    },
+    {
+      title: 'Empresa',
+      dataIndex: ['empresa', 'nombre'],
+      key: 'empresa',
+      filters: empresaFilters,
+      filterSearch: true, // Permite buscar en el menú de filtros
+      onFilter: (value, record) =>
+        record.empresa.nombre === value,
     },
     {
       title: 'Fecha Final',
-      dataIndex: 'fechaFinal',
+      dataIndex: ['custodiaExterna', 'fechaFinal'],
       key: 'fechaFinal',
-      sorter : (a,b)=> new Date(a.fechaFinal) - new Date(b.fechaFinal), 
-      sortDirections:["ascend","descend"],
-    },
-    {
-      title: 'Hora Final',
-      dataIndex: 'horaFinal',
-      key: 'horaFinal',
-      
+      filters: fechaFinalFilters,
+      onFilter: (value, record) =>
+        record.custodiaExterna.fechaFinal === value,
     },
     {
       title: 'Prioridad',
-      dataIndex: 'prioridad',
       key: 'prioridad',
-      filters: priorityFilters,
-      onFilter: (filterValue, record) => {
-        // record.prioridad es el ID; si coincide, lo muestra
-        return record.prioridad === filterValue;
+      filters: prioridadFilters,
+      onFilter: (value, record) =>
+        record.prioridad.codigo === value,
+      render: (text, record) => {
+        const { codigo, descripcion } = record.prioridad || {};
+        return `${codigo} - ${descripcion}`;
       },
-      render: (prioridadId) => {
-        // Buscar el objeto prioridad en el array prioridades
-        const p = prioridades.find(item => item.id === prioridadId);
-        // Si existe, retornar "codigo - descripcion"
-        return p ? `${p.codigo} - ${p.descripcion}` : 'Sin asignar';
-      },
+    },
+    {
+      title: 'Estado',
+      dataIndex: ['estado', 'descripcion'],
+      key: 'estado',
+      filters: estadoFilters,
+      onFilter: (value, record) =>
+        record.estado.descripcion === value,
     },
     {
       title: "Acción",
       key: "action",
       render: (_, record) => (
-        <Link to={`/DetallesCustodiaExternas/${record.id}`}>
+        <Link to={`/DetallesCustodiaExternas/${record.custodiaExterna.id}`}>
           <Button>Detalles</Button>
         </Link>
       ),
@@ -78,20 +105,25 @@ const CustodiasExterna = () => {
   ];
   
 
-
   return (
     <div style={{ padding: 32 }}>
       <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
         <Col>
           <Title level={3}>Custodia Externas</Title>
         </Col>
-        <Col><Link to="/crearCustodiaExterna">
-          <Button type="primary">Crear custodia externa</Button>
-        </Link>
+        <Col>
+          <Link to="/crearCustodiaExterna">
+            <Button type="primary">Crear custodia externa</Button>
+          </Link>
         </Col>
       </Row>
 
-      <Table columns={columns} dataSource={custodias} rowKey="id" pagination={{ pageSize: 5 }}/>
+      <Table
+        dataSource={dataSource}
+        columns={columns}
+        rowKey={(record) => record.custodiaExterna.id}
+        pagination={{ pageSize: 5 }}
+      />
     </div>
   );
 };

@@ -443,7 +443,7 @@ const RegistroCotizacion = () => {
                     //type="number"
                     min="1"
                     value={concepto.cantidad}
-                    onChange={(e) => handleInputChange(concepto.id, "cantidad", parseInt(e.target.value))}
+                    onChange={(value) => handleInputChange(concepto.id, "cantidad", value)}
                   />
                 </Form.Item>
               </Col>
@@ -488,7 +488,7 @@ const RegistroCotizacion = () => {
                     //type="number"
                     min="0"
                     value={concepto.precioFinal}
-                    onChange={(e) => handleInputChange(concepto.id, "precioFinal", parseFloat(e.target.value))}
+                    onChange={(value) => handleInputChange(concepto.id, "precioFinal", value)}
                   />
                 </Form.Item>
               </Col>

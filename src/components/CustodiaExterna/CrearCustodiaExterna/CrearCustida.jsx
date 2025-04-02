@@ -24,7 +24,7 @@ import { CheckOutlined, CloseOutlined,DownOutlined } from '@ant-design/icons';
 import { createCustodiaExterna, getCustodiaExternaById, updateCustodiaExterna } from '../../../apis/ApiCustodiaExterna/ApiCustodiaExtern';
 import { createMuestra, getMuestraById, getAllMuestra, updateMuestra } from '../../../apis/ApiCustodiaExterna/ApiMuestra';
 import { createpreservadormuestra } from '../../../apis/ApiCustodiaExterna/ApiPreservadorMuestra';
-import { getAllOrdenesTrabajo } from '../../../apis/ApisServicioCliente/OrdenTrabajoApi';
+import { getAllOrdenesTrabajo,getOrdenTrabajoById } from '../../../apis/ApisServicioCliente/OrdenTrabajoApi';
 import { getAllPrioridad } from '../../../apis/ApiCustodiaExterna/ApiPrioridad';
 import {getAllContenedor} from '../../../apis/ApiCustodiaExterna/ApiContenedor'
 import { getAllPreservador } from '../../../apis/ApiCustodiaExterna/ApiPreservador';
@@ -34,6 +34,8 @@ import { getAllParametro } from '../../../apis/ApiCustodiaExterna/ApiParametros'
 import { getAlldataordentrabajo } from '../../../apis/ApisServicioCliente/DataordentrabajoApi';
 import { getCustodiaExternaDataById } from '../../../apis/ApiCustodiaExterna/ApiCustodiaExternaData';
 import { getAllFiltro } from '../../../apis/ApiCustodiaExterna/ApiFiltro';
+//getReceptorById
+import { getReceptorById , getAllReceptor} from '../../../apis/ApisServicioCliente/ResectorApi';
 
 const { Title } = Typography;
 const { Panel } = Collapse;
@@ -49,6 +51,7 @@ const CrearCustodiaExterna = () => {
   const [ordenSeleccionada, setOrdenSeleccionada] = useState(null);
   const MAX_PRESERVADORES = 3;
   const modificacionDeLaOrdenDeTrabajo=Form.useWatch("modificacionDeLaOrdenDeTrabajo", form);
+  const asesoriaGestionAmbiental=Form.useWatch("asesoriaGestionAmbiental", form);
   const [ordenesTrabajo, setOrdenesTrabajo] = useState([]);
   const [prioridades, setPrioridades] = useState([]);
   const [contenedores, setContenedores] = useState([]);
@@ -60,17 +63,16 @@ const CrearCustodiaExterna = () => {
   const [dataOrdenTrabajo, setDataOrdenTrabajo] = useState(null);
   const [Filtros, setFiltros] = useState([]);
   const [muestras, setMuestras] = useState([]);
-  // Al seleccionar la orden:
-  //const ordenSeleccionadaData = ordenesTrabajo.find(orden => orden.id === ordenSeleccionada);
-  //const cotizacionId = ordenSeleccionadaData.cotizacionId;
-// Solo cuando se cargan preservadores y tienes un ID
+  const [custodia, setCustodia] = useState(null);
+  const [receptor, setReceptor] = useState(null);
+  const [receptores, setReceptores] = useState([]);
 
 
   useEffect(() => {
     if (id && preservadores.length > 0) {
       getCustodiaExternaDataById(id).then((res) => {
         const data = res.data;
-
+        console.log("data id && preservador: ",data);
         // 1. Setear datos del formulario principal
         if (data?.["custodiaExterna"]) {
           const custodia = data["custodiaExterna"];
@@ -91,7 +93,7 @@ const CrearCustodiaExterna = () => {
             prioridad: custodia["prioridad"]?.id,
             asesoriaGestionAmbiental: custodia["solicitudDeAsesoriaEnGestionAmbiental"],
             observaciones: custodia["observaciones"] || "",
-
+            receptorCam: custodia["receptor"].id || "",
           });
 
         },0);
@@ -159,6 +161,7 @@ const CrearCustodiaExterna = () => {
           });
           // Si necesitas actualizar estados locales, hazlo:
           setOrdenSeleccionada(data.ordenTrabajo);
+          // Guardar en estado para usarlo más adelante si lo necesitas
           // setTipoMuestra(data.tipoMuestra);
         })
         .catch((err) => console.error("Error al obtener custodia externa:", err));
@@ -166,17 +169,39 @@ const CrearCustodiaExterna = () => {
   }, [id, form]);
   
   useEffect(() => {
-    if (!ordenSeleccionada) return; // No hacemos nada si no hay orden seleccionada
+    if (ordenSeleccionada) {
+      // Primero, obtenemos los datos generales de la orden de trabajo
+      getAlldataordentrabajo(ordenSeleccionada)
+        .then((res) => {
+          console.log("Datos de getAlldataordentrabajo:", res.data);
+          setDataOrdenTrabajo(res.data);
+        })
+        .catch((err) => console.error("Error al obtener datos de OT:", err));
   
-    getAlldataordentrabajo(ordenSeleccionada)
-      .then((res) => {
-        // Aquí obtienes la información de la OT, cliente, etc.
-        console.log("Datos de getAlldataordentrabajo:", res.data);
-        // Guarda la data en el estado
-        setDataOrdenTrabajo(res.data);
-      })
-      .catch((err) => console.error("Error al obtener datos de OT:", err));
+      // Luego, usamos getOrdenTrabajoById para obtener el id del receptor
+      getOrdenTrabajoById(ordenSeleccionada)
+        .then((res2) => {
+          console.log("Datos de getOrdenTrabajoById:", res2.data);
+          // Supongamos que el receptor se encuentra en la propiedad "receptor" o "receptorId"
+          const receptorId = res2.data.receptor || res2.data.receptorId;
+          if (receptorId) {
+            getReceptorById(receptorId)
+              .then((resp) => {
+                console.log("Datos del receptor:", resp.data);
+                setReceptor(resp.data);
+              })
+              .catch((err) =>
+                console.error("Error al obtener receptor:", err)
+              );
+          }
+        })
+        .catch((err) =>
+          console.error("Error al obtener OrdenTrabajoById:", err)
+        );
+    }
   }, [ordenSeleccionada]);
+  
+  
   useEffect(() => {
     getAllOrdenesTrabajo()
       .then((res) => {
@@ -185,6 +210,15 @@ const CrearCustodiaExterna = () => {
       })
       .catch((err) => {
         console.error("Error al obtener órdenes de trabajo:", err);
+      });
+  }, []);
+  useEffect(() => {
+    getAllReceptor()
+      .then((res) => {
+        setReceptores(res.data);
+      })
+      .catch((err) => {
+        console.error("Error al obtener setReceptores:", err);
       });
   }, []);
   useEffect(() => {
@@ -251,12 +285,13 @@ const CrearCustodiaExterna = () => {
         horaFinal: values.horaFinal ? values.horaFinal.format("HH:mm:ss") : null,
         observaciones: values.observaciones,
         prioridad: values.prioridad,
-        receptor: 2, // o puedes hacer esto dinámico si lo necesitas
+        receptor: values.receptorCam, // o puedes hacer esto dinámico si lo necesitas
         ordenTrabajo: values.ordenTrabajo,
-        asesoriaGestionAmbiental:values.asesoriaGestionAmbiental,
+        asesoriaGestionAmbiental:values.asesoriaGestionAmbiental|| false,
         puestoCargoContacto:values.puestoCargoContacto,
-        correoDelContacto:values.correoDelContacto,
-        celularDelContacto:values.celularDelContacto,
+        correoContacto:values.correoDelContacto,
+        celularContacto:values.celularDelContacto,
+        estado:1,
       };
       let custodiaId;
 
@@ -540,7 +575,7 @@ const CrearCustodiaExterna = () => {
                style={{ maxWidth: 900 }}
                initialValues={{
                 modificacionDeLaOrdenDeTrabajo:false,
-                asesoria:false,
+                asesoriaGestionAmbiental:false,
                }}
                >
                 <Form.Item label="ID Orden de Trabajo" name="ordenTrabajo">
@@ -608,9 +643,18 @@ const CrearCustodiaExterna = () => {
                         {dataOrdenTrabajo.Empresa?.Dirección?.Estado || ""}
                       </Descriptions.Item>
                     </Descriptions>
-
+                    
                   </Card>
                   </div>
+                )}
+                {receptor && (
+                  <Card title="Receptor" style={{ marginBottom: 17 }}>
+                    <Descriptions column={1}>
+                      <Descriptions.Item label="Receptor">
+                        {receptor.nombrePila} {receptor.apPaterno} {receptor.apMaterno}
+                      </Descriptions.Item>
+                    </Descriptions>
+                  </Card>
                 )}
                <Row gutter={16}>
                <Col span={8}>
@@ -693,6 +737,20 @@ const CrearCustodiaExterna = () => {
                     {prioridades.map((item) => (
                       <Option key={item.id} value={item.id}>
                         {item.codigo} - {item.descripcion}
+                      </Option>
+                    ))}
+                  </Select>
+                  </Form.Item>
+                </Col>
+               </Row>
+
+               <Row gutter={16}>
+                <Col span={8}>
+                  <Form.Item label="Receptor" name="receptorCam">
+                  <Select placeholder="Selecciona prioridad">
+                    {receptores.map((item) => (
+                      <Option key={item.id} value={item.id}>
+                        {item.nombrePila} {item.apPaterno} {item.apMaterno}
                       </Option>
                     ))}
                   </Select>
