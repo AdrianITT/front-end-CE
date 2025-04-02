@@ -332,9 +332,9 @@ const GenerarOrdenTrabajo = () => {
 
         <Divider>Agregar Conceptos</Divider>
         {servicios.map((concepto, index) => (
-          <div key={index}>
+          <div key={concepto.id}>
             <Card>
-              <h3>Concepto {index+1}</h3>
+              <h3>Concepto {concepto.id}</h3>
               <div>            
               <Row justify="end">
                 <Checkbox onChange={() => handleRemoveConcepto(concepto.id)}>
@@ -345,7 +345,7 @@ const GenerarOrdenTrabajo = () => {
               <Row gutter={16}>
                 <Col span={12}>
                   <Form.Item
-                    name={['servicios', index, 'servicio']}
+                    name={['servicios', concepto.id, 'servicio']}
                     label="Servicio"
                     rules={[{ required: true, message: "Por favor, seleccione un servicio." }]}
                     initialValue={concepto.id}
@@ -364,7 +364,7 @@ const GenerarOrdenTrabajo = () => {
                 </Col>
                 <Col span={12}>
                   <Form.Item
-                    name={['servicios', index, 'cantidad']}
+                    name={['servicios', concepto.id, 'cantidad']}
                     label="Cantidad"
                     rules={[{ required: true, message: "Por favor ingresa la cantidad." }]}
                     initialValue={concepto.cantidad}
@@ -380,7 +380,7 @@ const GenerarOrdenTrabajo = () => {
               <Row gutter={16}>
                 <Col span={24}>
                 <Form.Item
-                  name={['servicios', index, 'descripcion']}
+                  name={['servicios', concepto.id, 'descripcion']}
                   label="Descripción"
                   rules={[{ required: true, message: "Por favor ingresa la descripción." }]}
                   initialValue={concepto.descripcion} 
