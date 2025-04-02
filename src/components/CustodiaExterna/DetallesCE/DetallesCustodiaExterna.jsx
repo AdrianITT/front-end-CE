@@ -2,16 +2,18 @@ import React, { useEffect, useState } from "react";
 import {useParams,useNavigate } from "react-router-dom";
 //import { DownloadOutlined } from '@ant-design/icons';
 import { Button,Descriptions, Card, Tag, Dropdown, Menu, Modal, Result } from 'antd';
-import {CheckCircleTwoTone, FileExcelTwoTone, CaretDownOutlined } from "@ant-design/icons";
+import {CheckCircleTwoTone, FileExcelTwoTone, CaretDownOutlined, MailTwoTone } from "@ant-design/icons";
 //import {Link} from "react-router-dom";
 //import { useParams, Link, useNavigate } from "react-router-dom";
 import './DetallesCustodiaExterna.css';
-import { getCustodiaExternaById } from "../../../apis/ApiCustodiaExterna/ApiCustodiaExtern";
+import { getAllCustodiaExterna, getCustodiaExternaById } from "../../../apis/ApiCustodiaExterna/ApiCustodiaExtern";
 import { getAllPrioridad } from '../../../apis/ApiCustodiaExterna/ApiPrioridad';
+import { getCustodiaExternaDataById } from '../../../apis/ApiCustodiaExterna/ApiCustodiaExternaData';
 
 export default function CadenaCustodiaExterna() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [custodiaExternas, setCustodiaExterna] = useState(null);
+  const [custodiaExternasData, setCustodiaExternaData] = useState(null);
   const [prioridades, setPrioridades] = useState([]);
   const { id } = useParams(); // Cambia esto por el ID real que necesites
   const navigate = useNavigate();
@@ -39,6 +41,13 @@ export default function CadenaCustodiaExterna() {
         console.log('getAllPrioridad: ',res.data);
       setPrioridades(res.data); // [{ id:1, codigo:'A', descripcion:'(15) Días hábiles'}, ...]
     });
+    getCustodiaExternaDataById(id)
+    .then((res) => {
+      console.log('res.data12: ',res.data);
+      // Asume que res.data contiene la custodia
+      setCustodiaExternaData(res.data);
+    })
+    
   }, [id]);
   //const { id } = useParams();
 
@@ -63,7 +72,10 @@ export default function CadenaCustodiaExterna() {
         <Menu.Item key="2" icon={<FileExcelTwoTone />} >
           descargar Excel
         </Menu.Item>{/*"/crearCustodiaExterna" to={`/crearCustodiaExterna/${id}`}*/}
-        <Menu.Item key="3" icon={<FileExcelTwoTone />} onClick={() => navigate(`/crearCustodiaExterna/${custodiaExternas.ordenTrabajo}`)}>
+        <Menu.Item key="3" icon={<FileExcelTwoTone />} onClick={() => navigate(`/crearCustodiaExterna/${custodiaExternas.id}`)}>
+          Editar o continuar con CE
+        </Menu.Item>
+        <Menu.Item key="4" icon={<MailTwoTone />} >
           Editar o continuar con CE
         </Menu.Item>
       </Menu>
@@ -73,7 +85,8 @@ export default function CadenaCustodiaExterna() {
     <h2>
       Detalles Cadena <span className="font-bold">de Custodia Externa</span>
     </h2>
-
+    {custodiaExternasData &&(
+      <div>
     {/* Contenedor alineado con el Card */}
     <div className="fila-etiqueta-boton borde-card">
     <Tag color={estados[estado].color} className="tag-grande">
@@ -90,7 +103,7 @@ export default function CadenaCustodiaExterna() {
     </div>
 
     <Card title="Custodia Externa" style={{ width: 900 }}>
-      <Descriptions title="User Info">
+      <Descriptions title="Info">
       <Descriptions.Item label="Prioridad">
         {custodiaExternas && prioridades.length > 0 ? (
           (() => {
@@ -105,7 +118,7 @@ export default function CadenaCustodiaExterna() {
               1: "green",
               // Agrega más mapeos según tus prioridades
             };
-
+            
             return prioridadObj ? (
               <Tag color={priorityColors[prioridadObj.id] || "default"}>
                 {`${prioridadObj.codigo} - ${prioridadObj.descripcion}`}
@@ -134,7 +147,37 @@ export default function CadenaCustodiaExterna() {
         {custodiaExternas?.puntosMuestreoAutorizados}
       </Descriptions.Item>
       </Descriptions>
+
+      <Descriptions title="Info Cliente" column={2} style={{marginTop:24}}>
+        <Descriptions.Item label="Nombre">
+          {custodiaExternasData.cliente?.nombre}
+        </Descriptions.Item>
+        <Descriptions.Item label="Correo">
+          {custodiaExternasData.cliente?.correo}
+        </Descriptions.Item>
+        <Descriptions.Item label="Celular">
+          {custodiaExternasData.cliente?.celular}
+        </Descriptions.Item>
+      </Descriptions>
+      <Descriptions title="Info Empresa" column={2} style={{marginTop:24}}>
+        <Descriptions.Item label="Nombre">
+          {custodiaExternasData.empresa?.nombre}
+        </Descriptions.Item>
+        <Descriptions.Item label="Dirección">
+          {[
+            custodiaExternasData.empresa?.direccion?.calle,
+            custodiaExternasData.empresa?.direccion?.numero,
+            custodiaExternasData.empresa?.direccion?.colonia,
+            custodiaExternasData.empresa?.direccion?.ciudad,
+            custodiaExternasData.empresa?.direccion?.estado,
+            custodiaExternasData.empresa?.direccion?.codigoPostal,
+          ].filter(Boolean).join(', ')}
+        </Descriptions.Item>
+      </Descriptions>
     </Card>
+
+      </div>
+  )}
     <Modal 
     title="Basic Modal" 
     open={isModalOpen} 
@@ -142,7 +185,7 @@ export default function CadenaCustodiaExterna() {
     onCancel={handleCancel}>
       <Result
           title="Esta seguro de cambiar el estado de la cadena de custodia?"
-        />
+          />
       </Modal>
   </div>
 

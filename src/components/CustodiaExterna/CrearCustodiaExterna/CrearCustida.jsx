@@ -19,10 +19,10 @@ import {
   Radio
 } from 'antd';
 import moment from "moment";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, data } from "react-router-dom";
 import { CheckOutlined, CloseOutlined,DownOutlined } from '@ant-design/icons';
-import { createCustodiaExterna, getCustodiaExternaById } from '../../../apis/ApiCustodiaExterna/ApiCustodiaExtern';
-import { createMuestra, getMuestraById } from '../../../apis/ApiCustodiaExterna/ApiMuestra';
+import { createCustodiaExterna, getCustodiaExternaById, updateCustodiaExterna } from '../../../apis/ApiCustodiaExterna/ApiCustodiaExtern';
+import { createMuestra, getMuestraById, getAllMuestra, updateMuestra } from '../../../apis/ApiCustodiaExterna/ApiMuestra';
 import { createpreservadormuestra } from '../../../apis/ApiCustodiaExterna/ApiPreservadorMuestra';
 import { getAllOrdenesTrabajo } from '../../../apis/ApisServicioCliente/OrdenTrabajoApi';
 import { getAllPrioridad } from '../../../apis/ApiCustodiaExterna/ApiPrioridad';
@@ -32,6 +32,8 @@ import { getAllMatriz } from '../../../apis/ApiCustodiaExterna/ApiMatriz';
 import { getAllClave } from '../../../apis/ApiCustodiaExterna/ApiClave';
 import { getAllParametro } from '../../../apis/ApiCustodiaExterna/ApiParametros';
 import { getAlldataordentrabajo } from '../../../apis/ApisServicioCliente/DataordentrabajoApi';
+import { getCustodiaExternaDataById } from '../../../apis/ApiCustodiaExterna/ApiCustodiaExternaData';
+import { getAllFiltro } from '../../../apis/ApiCustodiaExterna/ApiFiltro';
 
 const { Title } = Typography;
 const { Panel } = Collapse;
@@ -46,7 +48,7 @@ const CrearCustodiaExterna = () => {
   const [activeKey, setActiveKey] = useState([0]);
   const [ordenSeleccionada, setOrdenSeleccionada] = useState(null);
   const MAX_PRESERVADORES = 3;
-  const modificacionOrdenTrabajo=Form.useWatch("modificacionOrdenTrabajo", form);
+  const modificacionDeLaOrdenDeTrabajo=Form.useWatch("modificacionDeLaOrdenDeTrabajo", form);
   const [ordenesTrabajo, setOrdenesTrabajo] = useState([]);
   const [prioridades, setPrioridades] = useState([]);
   const [contenedores, setContenedores] = useState([]);
@@ -56,33 +58,82 @@ const CrearCustodiaExterna = () => {
   const [parametros, setParametros] = useState([]);
   const [tipoMuestras, setTipoMuestra] = useState(null);
   const [dataOrdenTrabajo, setDataOrdenTrabajo] = useState(null);
+  const [Filtros, setFiltros] = useState([]);
   const [muestras, setMuestras] = useState([]);
   // Al seleccionar la orden:
   //const ordenSeleccionadaData = ordenesTrabajo.find(orden => orden.id === ordenSeleccionada);
   //const cotizacionId = ordenSeleccionadaData.cotizacionId;
+// Solo cuando se cargan preservadores y tienes un ID
+
+
   useEffect(() => {
-    if (id) {  // id es la custodiaExterna ID
-      getMuestraById(id)
-      .then((res) => {
-        console.log("res.data: ",res.data);
+    if (id && preservadores.length > 0) {
+      getCustodiaExternaDataById(id).then((res) => {
         const data = res.data;
-        // Convertir fechas a moment
-        data.fechaMuestreo = data.fechaMuestreo
-          ? moment(data.fechaMuestreo, "YYYY-MM-DD")
-          : null;
-        data.horaMuestreo = data.horaMuestreo
-          ? moment(data.horaMuestreo, "HH:mm:ss")
-          : null;
-    
-        // Precarga el formulario con un solo objeto
-        // (si tu form usa 'bitacoras[0]', lo pones dentro de un array)
-        form.setFieldsValue({ bitacoras: [data] });
-        setBitacoras([0]);
-      })
-      .catch((err) => console.error("Error al obtener muestras:", err));
-    
+
+        // 1. Setear datos del formulario principal
+        if (data?.["custodiaExterna"]) {
+          const custodia = data["custodiaExterna"];
+          console.log("res.data: ",res.data)
+          setTimeout(()=>{
+          console.log("PuestoCargo recibido:", custodia["Puesto o Cargo del Contacto"]);
+          form.setFieldsValue({
+            contacto: custodia["contacto"] || "",
+            puestoCargoContacto: custodia["puestoOCargoDelContacto"] || "",
+            celularDelContacto: custodia["celularDelContacto"] || "",
+            correoDelContacto: custodia["correoDelContacto"] || "",
+            puntosMuestreoAutorizados: custodia["puntosDeMuestreoAutorizados"] || "",
+            modificacionDeLaOrdenDeTrabajo: custodia["modificacionDeLaOrdenDeTrabajo"],
+            observacionesDeLaModificacion: custodia["observacionesDeLaModificacion"] || "",
+            muestreoRequerido: custodia["muestreoRequerido"] || "",
+            fechaFinal: custodia["fechaFinal"] ? moment(custodia["fechaFinal"], "DD-MM-YYYY") : null,
+            horaFinal: custodia["horaFinal"] ? moment(custodia["horaFinal"], "HH:mm:ss") : null,
+            prioridad: custodia["prioridad"]?.id,
+            asesoriaGestionAmbiental: custodia["solicitudDeAsesoriaEnGestionAmbiental"],
+            observaciones: custodia["observaciones"] || "",
+
+          });
+
+        },0);
+        }
+        
+
+        // 2. Setear muestras (bitácoras)
+        if (data?.custodiaExterna?.muestras) {
+          const muestras = data.custodiaExterna.muestras;
+        
+          const muestrasFormateadas = muestras.map((muestra) => ({
+            id: muestra.id,
+            identificacionCampo: muestra.identificacionDeCampo,
+            fechaMuestreo: moment(muestra.fechaDeMuestreo, "DD-MM-YYYY"),
+            horaMuestreo: moment(muestra.horaDeMuestreo, "HH:mm:ss"),
+            matriz: muestra.matriz?.id,
+            volumenCantidad: muestra.volumenOCantidad,
+            filtro: muestra.filtro.id,
+            parametro: muestra.parametro?.id,
+            contenedor: muestra.conservador?.id,
+            numeroContenedor: muestra.numeroDeContenedor,
+            origenMuestra: muestra.origenDeLaMuestra,
+            tipoMuestra: muestra.tipoDeMuestra ? [muestra.tipoDeMuestra.id] : [],
+            preservador: (muestra.preservadores || []).map((p) => ({
+              value: p.id,
+              label: `${p.id} - ${p.nombre}`,
+            })),
+          }));
+
+        
+          setMuestras(muestrasFormateadas);
+          setBitacoras(muestrasFormateadas.map((muestra) => muestra.id));
+          setActiveKey(muestrasFormateadas.map((_, idx) => idx));
+          form.setFieldsValue({ bitacoras: muestrasFormateadas });
+        }
+
+      });
     }
-  }, [id, form]);
+  }, [id, preservadores, form]);
+
+
+  
   
   
   useEffect(() => {
@@ -146,6 +197,15 @@ const CrearCustodiaExterna = () => {
       });
   }, []);
   useEffect(() => {
+    getAllFiltro()
+      .then((res) => {
+        setFiltros(res.data);
+      })
+      .catch((err) => {
+        console.error("Error al obtener prioridades:", err);
+      });
+  }, []);
+  useEffect(() => {
     getAllContenedor()
       .then(res => setContenedores(res.data))
       .catch(err => console.error("Error al obtener contenedores:", err));
@@ -164,6 +224,9 @@ const CrearCustodiaExterna = () => {
     getAllParametro()
       .then(res => setParametros(res.data))
       .catch(err => console.error("Error al obtener matrices:", err));
+    getAllFiltro()
+      .then(res => setFiltros(res.data))
+      .catch(err => console.error("Error al obtener matrices:", err));
   }, []);
   
   
@@ -181,7 +244,7 @@ const CrearCustodiaExterna = () => {
       const custodiaPayload = {
         contacto: values.contacto || "sin contacto",
         puntosMuestreoAutorizados: values.puntosMuestreoAutorizados || "0",
-        modificacionOrdenTrabajo: values.modificacionOrdenTrabajo || false,
+        modificacionOrdenTrabajo: values.modificacionDeLaOrdenDeTrabajo || false,
         observacionesModificacion: values.observacionesModificacion || "",
         muestreoRequerido: values.muestreoRequerido,
         fechaFinal: values.fechaFinal ? values.fechaFinal.format("YYYY-MM-DD") : null,
@@ -191,11 +254,19 @@ const CrearCustodiaExterna = () => {
         receptor: 2, // o puedes hacer esto dinámico si lo necesitas
         ordenTrabajo: values.ordenTrabajo,
         asesoriaGestionAmbiental:values.asesoriaGestionAmbiental,
+        puestoCargoContacto:values.puestoCargoContacto,
+        correoDelContacto:values.correoDelContacto,
+        celularDelContacto:values.celularDelContacto,
       };
-      console.log("Payload de custodia externa:", custodiaPayload);
-  
-      const custodiaRes = await createCustodiaExterna(custodiaPayload);
-      const custodiaId = custodiaRes.data.id;
+      let custodiaId;
+
+      if (id) {
+        const res = await updateCustodiaExterna(id, custodiaPayload);
+        custodiaId = res.data.id;
+      } else {
+        const res = await createCustodiaExterna(custodiaPayload);
+        custodiaId = res.data.id;
+      }
   
       // 2. Crear las muestras
       const bitacoras = values.bitacoras || [];
@@ -203,34 +274,50 @@ const CrearCustodiaExterna = () => {
   
       for (const bitacora of bitacoras) {
         const muestraPayload = {
-          identificacionCampo: bitacora.IdCampo|| null,
+          identificacionCampo: bitacora.identificacionCampo || null,
           fechaMuestreo: bitacora.fechaMuestreo ? bitacora.fechaMuestreo.format("YYYY-MM-DD") : null,
-          horaMuestreo: bitacora.HoraMuestreo? bitacora.HoraMuestreo.format("HH:mm:ss") : null,
-          volumenCantidad: bitacora.volumen,
+          horaMuestreo: bitacora.horaMuestreo ? bitacora.horaMuestreo.format("HH:mm:ss") : null,
+          volumenCantidad: bitacora.volumenCantidad,
           numeroContenedor: bitacora.numeroContenedor || "1",
-          origenMuestra: bitacora.origen,
+          origenMuestra: bitacora.origenMuestra,
           idLaboratorio: null,
-          filtro: null,
+          filtro: bitacora.filtro,
           matriz: bitacora.matriz,
           contenedor: bitacora.contenedor,
-          tipoMuestra: tipoMuestras||null, // si usas `Puntual` o `Compuesta` aquí puedes cambiarlo
-          parametro: bitacora.metodo,
+          tipoMuestra: bitacora.tipoMuestra?.[0] || null, // Es un array, tomamos el valor único
+          parametro: bitacora.parametro,
           custodiaExterna: custodiaId,
         };
-        console.log("Payload de muestra:", muestraPayload);
-  
-        const muestraRes = await createMuestra(muestraPayload);
-        const muestraId = muestraRes.data.id;
-        console.log("Payload de muestra:", muestraPayload);
-  
-        // 3. Relacionar preservadores
-        for (const preservadorId of bitacora.preservadores || []) {
-          await createpreservadormuestra({
-            muestra: muestraId,
-            preservador: preservadorId,
-          });
+        console.log("🧪 Bitácoras con IDs:", values.bitacoras);
+        let muestraId = null;
+      
+        if (bitacora.id) {
+          // ✅ Actualiza la muestra existente
+          await updateMuestra(bitacora.id, muestraPayload);
+          muestraId = bitacora.id;
+      
+          // ❌ No relaciones preservadores de nuevo
+        } else {
+          // ✅ Crea nueva muestra
+          const res = await createMuestra(muestraPayload);
+          muestraId = res.data.id;
+      
+          // ✅ Solo si es nueva, relaciona preservadores múltiples
+          if (Array.isArray(bitacora.preservador)) {
+            for (const preservador of bitacora.preservador) {
+              try {
+                await createpreservadormuestra({
+                  muestra: muestraId,
+                  preservador: preservador.value, // ⚠️ Necesitas `value`, no el objeto entero
+                });
+              } catch (err) {
+                console.error(`❌ Error al relacionar preservador ${preservador.value}:`, err.response?.data || err);
+              }
+            }
+          }
         }
       }
+      
       navigate(`/DetallesCustodiaExternas/${custodiaId}`);
       console.log("✅ Todo creado correctamente");
     } catch (error) {
@@ -244,9 +331,55 @@ const CrearCustodiaExterna = () => {
    const renderBitacoraPanel = (index) => (
     <Panel header={`Muestras del parámetro ${index + 1}`} key={index}>
       <Row gutter={[16, 16]}>
+      <Form.Item name={['bitacoras', index, 'id']} noStyle>
+        <Input type="hidden" />
+      </Form.Item>
+
+        {/* IDENTIFICACIÓN DE CAMPO */}
+        <Col span={8}>
+          <Form.Item label="Identificación de campo"
+          rules={[{ required: true, message: 'Ingresa identificador de campo' }]}
+          name={['bitacoras', index, 'identificacionCampo']}>
+            <Input  />
+          </Form.Item>
+        </Col>
+
+        {/* MATRIZ */}
+        <Col span={8}>
+          <Form.Item label="Matriz" name={['bitacoras', index, 'matriz']}>
+          <Select placeholder="Selecciona matriz">
+            {matrices.map((item) => (
+              <Option key={item.id} value={item.id}>
+                {item.codigo} - {item.nombre}
+              </Option>
+            ))}
+          </Select>
+          </Form.Item>
+        </Col>
+
+        {/* VOLUMEN / CANTIDAD */}
+        <Col span={8}>
+          <Form.Item label="Volumen / cantidad" name={['bitacoras', index, 'volumenCantidad']}>
+            <Input placeholder="Ej. 500 ml" />
+          </Form.Item>
+        </Col>
+
+        {/* ID FILTRO */}
+        <Col span={8}>
+          <Form.Item label="Filtro" name={['bitacoras', index, 'filtro']}>
+          <Select placeholder="Selecciona Filtro">
+            {Filtros.map((item) => (
+              <Option key={item.id} value={item.id}>
+                {item.id} - {item.codigo}
+              </Option>
+            ))}
+          </Select>
+          </Form.Item>
+        </Col>
+        
         {/* MÉTODO */}
         <Col span={8}>
-          <Form.Item label="Método" name={['bitacoras', index, 'parametro']}>
+          <Form.Item label="Método/Paramatro" name={['bitacoras', index, 'parametro']}>
             <Select placeholder="Selecciona método">
               {parametros.map((item)=>(
                 <Option key={item.id} value={item.id}>
@@ -256,6 +389,7 @@ const CrearCustodiaExterna = () => {
             </Select>
           </Form.Item>
         </Col>
+        
   
         {/* CONTENEDOR */}
         <Col span={8}>
@@ -272,12 +406,13 @@ const CrearCustodiaExterna = () => {
   
         {/* PRESERVADOR */}
         <Col span={8}>
-          <Form.Item label="Preservadores" name={['bitacoras', index, 'preservadores']}>
+          <Form.Item label="Preservadores" name={['bitacoras', index, 'preservador']}>
             <Select
             mode="multiple"
             maxCount={MAX_PRESERVADORES}
             placeholder="Selecciona preservador"
             suffixIcon={<DownOutlined />}
+            labelInValue
           >
             {preservadores.map((item) => (
               <Option key={item.id} value={item.id}>
@@ -285,44 +420,6 @@ const CrearCustodiaExterna = () => {
               </Option>
             ))}
           </Select>
-          </Form.Item>
-        </Col>
-
-  
-        {/* IDENTIFICACIÓN DE CAMPO */}
-        <Col span={8}>
-          <Form.Item label="Identificación de campo"
-          rules={[{ required: true, message: 'Ingresa identificador de campo' }]}
-          name={['bitacoras', index, 'identificacionCampo']}>
-            <Input/>
-          </Form.Item>
-        </Col>
-
-  
-        {/* MATRIZ */}
-        <Col span={8}>
-          <Form.Item label="Matriz" name={['bitacoras', index, 'matriz']}>
-          <Select placeholder="Selecciona matriz">
-            {matrices.map((item) => (
-              <Option key={item.id} value={item.id}>
-                {item.codigo} - {item.nombre}
-              </Option>
-            ))}
-          </Select>
-          </Form.Item>
-        </Col>
-  
-        {/* VOLUMEN / CANTIDAD */}
-        <Col span={8}>
-          <Form.Item label="Volumen / cantidad" name={['bitacoras', index, 'volumenCantidad']}>
-            <Input placeholder="Ej. 500 ml" />
-          </Form.Item>
-        </Col>
-  
-        {/* ID FILTRO */}
-        <Col span={8}>
-          <Form.Item label="ID Filtro" name={['bitacoras', index, 'filtro']}>
-            <Input placeholder="Ej. F123" />
           </Form.Item>
         </Col>
   
@@ -347,6 +444,18 @@ const CrearCustodiaExterna = () => {
           <InputNumber />
         </Form.Item>
         </Col>
+          <Row gutter={16}>
+            <Col span={24}>
+            <Form.Item label="Tipo de muestra" name={['bitacoras', index, 'tipoMuestra']}>
+            <Checkbox.Group >
+              <Checkbox value={2}>Muestra Compuesta</Checkbox>
+              <Checkbox value={1}>Muestra Puntual</Checkbox>
+            </Checkbox.Group>
+            </Form.Item>
+
+              
+            </Col>
+          </Row>
       </Row>
     </Panel>
   );
@@ -430,7 +539,7 @@ const CrearCustodiaExterna = () => {
                onFinish={handleFinish}
                style={{ maxWidth: 900 }}
                initialValues={{
-                modificacionOrdenTrabajo:false,
+                modificacionDeLaOrdenDeTrabajo:false,
                 asesoria:false,
                }}
                >
@@ -452,6 +561,8 @@ const CrearCustodiaExterna = () => {
                   </Select>
                 </Form.Item>
                 {ordenSeleccionada && dataOrdenTrabajo && (
+                  <div>
+
                   <Card title="Datos del cliente" style={{ marginBottom: 17 }}>
                     <Descriptions column={1}>
 
@@ -467,12 +578,13 @@ const CrearCustodiaExterna = () => {
 
                       {/* Dirección: concatenamos los campos dentro de dataOrdenTrabajo.Cliente.Dirección */}
                       <Descriptions.Item label="Dirección">
-                        {dataOrdenTrabajo.Cliente.Dirección.Calle}{" "}
-                        {dataOrdenTrabajo.Cliente.Dirección.Numero},{" "}
-                        {dataOrdenTrabajo.Cliente.Dirección.Colonia},{" "}
-                        {dataOrdenTrabajo.Cliente.Dirección.Ciudad},{" "}
-                        {dataOrdenTrabajo.Cliente.Dirección.Estado}
+                        {dataOrdenTrabajo.Cliente?.Dirección?.Calle || ""}{" "}
+                        {dataOrdenTrabajo.Cliente?.Dirección?.Numero || ""},{" "}
+                        {dataOrdenTrabajo.Cliente?.Dirección?.Colonia || ""},{" "}
+                        {dataOrdenTrabajo.Cliente?.Dirección?.Ciudad || ""},{" "}
+                        {dataOrdenTrabajo.Cliente?.Dirección?.Estado || ""}
                       </Descriptions.Item>
+
 
                       {/* Correo */}
                       <Descriptions.Item label="Correo">
@@ -481,6 +593,24 @@ const CrearCustodiaExterna = () => {
 
                     </Descriptions>
                   </Card>
+                  <Card title="Datos de Empresa" style={{ marginBottom: 17 }}>
+                    <Descriptions column={1}>
+
+                      {/* Nombre Empresa */}
+                      <Descriptions.Item label="Empresa">
+                      {dataOrdenTrabajo.Empresa.Nombre}{" "}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Dirección">
+                        {dataOrdenTrabajo.Empresa?.Dirección?.Calle || ""}{" "}
+                        {dataOrdenTrabajo.Empresa?.Dirección?.Numero || ""},{" "}
+                        {dataOrdenTrabajo.Empresa?.Dirección?.Colonia || ""},{" "}
+                        {dataOrdenTrabajo.Empresa?.Dirección?.Ciudad || ""},{" "}
+                        {dataOrdenTrabajo.Empresa?.Dirección?.Estado || ""}
+                      </Descriptions.Item>
+                    </Descriptions>
+
+                  </Card>
+                  </div>
                 )}
                <Row gutter={16}>
                <Col span={8}>
@@ -495,11 +625,21 @@ const CrearCustodiaExterna = () => {
                 <Col span={8}>
                   <Form.Item
                     label="Puesto/Cargo: "
-                    name="PuestoCargo"
+                    name="puestoCargoContacto"
                   >
                     <Input />
                   </Form.Item>
                 </Col>
+                <Col span={8}>
+                <Form.Item label="E-mail:" name="correoDelContacto">
+                      <Input />
+                    </Form.Item>
+                  </Col>
+                  <Col span={8}>
+                <Form.Item label="TelCel:" name="celularDelContacto">
+                      <Input />
+                    </Form.Item>
+                  </Col>
                 <Col span={8}>
                   <Form.Item
                     label="Puntos de muestreo autorizados"
@@ -509,7 +649,7 @@ const CrearCustodiaExterna = () => {
                   </Form.Item>
                 </Col>
                 <Col span={8}>
-                  <Form.Item name="modificacionOrdenTrabajo" valuePropName="checked"
+                  <Form.Item name="modificacionDeLaOrdenDeTrabajo" valuePropName="checked"
                   label="¿El Cliente solicita modificación a la OT?">
                     <Switch
                       checkedChildren={<CheckOutlined />}
@@ -517,11 +657,11 @@ const CrearCustodiaExterna = () => {
                     />
                   </Form.Item>
                 </Col>
-                {modificacionOrdenTrabajo&& (
+                {modificacionDeLaOrdenDeTrabajo&& (
                 <Col span={8}>
                   <Form.Item
                       label="Modificacion solicitada:"
-                      name="muestreoRequerido"
+                      name="observacionesModificacion"
                     >
                       <Input />
                   </Form.Item>
@@ -531,7 +671,7 @@ const CrearCustodiaExterna = () => {
                 <Col span={8}>
                   <Form.Item
                       label="Muestro requerido por:"
-                      name="observacionesModificacion"
+                      name="muestreoRequerido"
                     >
                       <Input />
                   </Form.Item>
@@ -567,14 +707,14 @@ const CrearCustodiaExterna = () => {
                </Form.Item>
 
                <Collapse activeKey={activeKey} onChange={(keys) => setActiveKey(keys)}>
-                    {bitacoras.map((bitacoraId) => renderBitacoraPanel(bitacoraId))}
+                    {bitacoras.map((_, index) => renderBitacoraPanel(index))}
                </Collapse>
-                <Col>
+                {/* <Col>
                   <Form.Item label="Muestreado por:" name="muestreado">
                     <Input />
                   </Form.Item>
-                </Col>
-                <Col>
+                </Col>*/}
+                <Col span={40}>
                   <Form.Item label="Observaciones" name="observaciones">
                       <Input.TextArea showCount maxLength={120} />
                   </Form.Item>
@@ -600,11 +740,6 @@ const CrearCustodiaExterna = () => {
                       <Input />
                     </Form.Item>
                   </Col>
-                  <Col span={8}>
-                    <Form.Item label="E-mail:" name="correo">
-                      <Input />
-                    </Form.Item>
-                  </Col>
                 </Row>
 
                 <Row gutter={16} style={{ marginBottom: 16 }}>
@@ -614,37 +749,10 @@ const CrearCustodiaExterna = () => {
                     </Form.Item>
                   </Col>
                 </Row>
-
-                <Card title="Tipo de Muestras" style={{ display: 'inline-block', marginBottom: 16 }}>
-                  <Row gutter={16}>
-                    <Col span={24}>
-                    <Form.Item label="Tipo de muestra" name="tipoMuestra">
-                    <Checkbox.Group onChange={(checkedValues) => setTipoMuestra(checkedValues[0])}>
-                      <Checkbox value={2}>Muestra Compuesta</Checkbox>
-                      <Checkbox value={1}>Muestra Puntual</Checkbox>
-                    </Checkbox.Group>
-                    </Form.Item>
-
-                      {tipoMuestras === 2 && (
-                        <Form.Item label="ID Compuesta" name="idCompuesta" rules={[{ required: true, message: 'Ingresa el ID de la muestra compuesta' }]}>
-                          <Input />
-                        </Form.Item>
-                      )}
-
-                      {tipoMuestras === 1 && (
-                        <Form.Item label="ID Puntual" name="idPuntual" rules={[{ required: true, message: 'Ingresa el ID de la muestra puntual' }]}>
-                          <Input />
-                        </Form.Item>
-                      )}
-                    </Col>
-                  </Row>
-                </Card>
-
-
                <Form.Item style={{ marginTop: 17, textAlign: 'right' }}>
-                    <Button type="primary" htmlType="submit">
-                    Crear Custodia
-                    </Button>
+                  <Button type="primary" htmlType="submit">
+                    {id ? 'Actualizar Custodia' : 'Crear Custodia'}
+                  </Button>
                </Form.Item>
                </Form>
           </div>
