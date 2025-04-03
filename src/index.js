@@ -44,7 +44,7 @@ import LayoutLaboratorio from "./components/Layoutsjs/LayoutLaboratorio";
 import Muestras from "./components/Laboratorio/Muestras/Muestras";
 import CustodiaInterna from "./components/Laboratorio/CustodiaInterna/CustodiaInterna";
 import DoTaskCustodiaInterna from "./components/Laboratorio/TasksCustodiaInterna/DoTaskCustodiaInterna";
-import CustodiasExternas from "./components/CustodiaExterna/CustodiaExterna";
+import CustodiasExternas from "./components/CustodiaExterna/CustodiasExterna";
 import CrearCustodiaExterna from "./components/CustodiaExterna/CrearCustodiaExterna/CrearCustida";
 import DetallesCustodiaExterna from "./components/CustodiaExterna/DetallesCE/DetallesCustodiaExterna";
 
@@ -108,17 +108,17 @@ const AppRouter = () => {
 
         {/* Rutas sin LayoutLaboratorio */}
         <Route element={<LayoutLaboratorio/>} >
-        <Route path="/HomeLaboratorio" element={<ProtectedRoute allowedRoles={['Administrador']}><HomeLaboratorio /></ProtectedRoute>} />
-        <Route path="/Muestras" element={<ProtectedRoute allowedRoles={['Administrador']}><Muestras /></ProtectedRoute>} />
-        <Route path="/CustodiaInterna" element={<ProtectedRoute allowedRoles={['Administrador']}><CustodiaInterna /></ProtectedRoute>} />
-        <Route path="/DoTaskCustodiaInterna" element={<ProtectedRoute allowedRoles={['Administrador']}><DoTaskCustodiaInterna /></ProtectedRoute>} />
+        <Route path="/HomeLaboratorio" element={<HomeLaboratorio />} />
+        <Route path="/Muestras" element={<Muestras />} />
+        <Route path="/CustodiaInterna" element={<CustodiaInterna />} />
+        <Route path="/DoTaskCustodiaInterna" element={<DoTaskCustodiaInterna />} />
         </Route>
         {/* Rutas sin LayoutCustodiaExterna */}
         <Route element={<LayoutCustodiaExterna/>} >
-        <Route path="/CustodiaExterna" element={<ProtectedRoute allowedRoles={['Administrador']}><CustodiasExternas /></ProtectedRoute>} />
-        <Route path="/CrearCustodiaExterna" element={<ProtectedRoute allowedRoles={['Administrador']}><CrearCustodiaExterna /></ProtectedRoute>} />
-        <Route path="/CrearCustodiaExterna/:id" element={<ProtectedRoute allowedRoles={['Administrador']}><CrearCustodiaExterna /></ProtectedRoute>} />
-        <Route path="/DetallesCustodiaExternas/:id" element={<ProtectedRoute allowedRoles={['Administrador']}><DetallesCustodiaExterna /></ProtectedRoute>} />
+        <Route path="/custodiaExterna" element={<CustodiasExternas />} />
+        <Route path="/CrearCustodiaExterna" element={<CrearCustodiaExterna />} />
+        <Route path="/CrearCustodiaExterna/:id" element={<CrearCustodiaExterna />} />
+        <Route path="/DetallesCustodiaExternas/:id" element={<DetallesCustodiaExterna />} />
         </Route>
 
         {/* Rutas envueltas con Layout */}

@@ -6,7 +6,7 @@ import {CheckCircleTwoTone, FileExcelTwoTone, CaretDownOutlined, MailTwoTone } f
 //import {Link} from "react-router-dom";
 //import { useParams, Link, useNavigate } from "react-router-dom";
 import './DetallesCustodiaExterna.css';
-import { getAllCustodiaExterna, getCustodiaExternaById } from "../../../apis/ApiCustodiaExterna/ApiCustodiaExtern";
+import { getCustodiaExternaById } from "../../../apis/ApiCustodiaExterna/ApiCustodiaExtern";
 import { getAllPrioridad } from '../../../apis/ApiCustodiaExterna/ApiPrioridad';
 import { getCustodiaExternaDataById } from '../../../apis/ApiCustodiaExterna/ApiCustodiaExternaData';
 
@@ -17,11 +17,12 @@ export default function CadenaCustodiaExterna() {
   const [prioridades, setPrioridades] = useState([]);
   const { id } = useParams(); // Cambia esto por el ID real que necesites
   const navigate = useNavigate();
-  const estado = 1; // Cambia esto por el estado real que necesites
+  //const estado = 1; // Cambia esto por el estado real que necesites
   const estados = {
-    1: { color: "warning", texto: "Pendiente" },
-    2: { color: "processing", texto: "En proceso" },
-    3: { color: "success", texto: "Completado" },
+    1: { color: "orange", texto: "Iniciado" },
+    2: { color: "processing", texto: "Completado" },
+    3: { color: "success", texto: "Entregado" },
+    4: { color: "error", texto: "Finalizado" },
   };
   
 
@@ -89,8 +90,8 @@ export default function CadenaCustodiaExterna() {
       <div>
     {/* Contenedor alineado con el Card */}
     <div className="fila-etiqueta-boton borde-card">
-    <Tag color={estados[estado].color} className="tag-grande">
-      {estados[estado].texto}
+    <Tag bordered={false} color={estados[custodiaExternas.estado].color} className="tag-grande">
+      {estados[custodiaExternas.estado].texto}
     </Tag>
       {/* <Button type="primary" size="large">Actualizar estado</Button>*/}
       <Dropdown overlay={menu}>
@@ -113,7 +114,8 @@ export default function CadenaCustodiaExterna() {
             );
             // Definir el mapeo de colores por id de prioridad
             const priorityColors = {
-              3: "red",
+              4: "red",
+              3:"cyan",
               2: "blue",
               1: "green",
               // Agrega más mapeos según tus prioridades

@@ -502,6 +502,7 @@ const RegistroCotizacion = () => {
             </Button>
           </div>
         
+          <center>
 
         <div className="cotizacion-totals-buttons">
           <div className="cotizacion-totals">
@@ -518,6 +519,7 @@ const RegistroCotizacion = () => {
             </div>
           </div>
         </div>
+          </center>
       </Form>
 
       <Modal

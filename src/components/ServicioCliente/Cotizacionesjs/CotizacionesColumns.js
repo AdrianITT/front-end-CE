@@ -56,11 +56,12 @@ export const useCotizacionesColumns = () => {
       sorter: (a, b) => new Date(a.fechaCaducidad) - new Date(b.fechaCaducidad),
       sortDirections: ["ascend", "descend"],
     },
-    { title: "Moneda", dataIndex: "Moneda", key: "moneda" },
+    { title: "Moneda", dataIndex: "Moneda", key: "Moneda", render: (moneda) => moneda?.codigo || "—", },
     {
       title: "Estado",
       dataIndex: "Estado",
       key: "Estado",
+      render : (estado)=> estado?.nombre||"",
       filterDropdown: ({ setSelectedKeys, selectedKeys, confirm }) => (
         <div style={{ padding: 8 }}>
           <Menu
@@ -77,7 +78,7 @@ export const useCotizacionesColumns = () => {
           </Menu>
         </div>
       ),
-      onFilter: (value, record) => value === "all" || record.estado === value,
+      onFilter: (value, record) => value === "all" || record.Estado?.nombre === value,
     },
     {
       title: "Acción",

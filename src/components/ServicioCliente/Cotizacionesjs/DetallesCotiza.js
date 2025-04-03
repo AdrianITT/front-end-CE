@@ -8,7 +8,7 @@ import { useCotizacionDetails } from "../Cotizacionesjs/CotizacionDetalles/useCo
 import ServiciosTable from "../Cotizacionesjs/CotizacionDetalles/ServiciosTable";
 import CotizacionInfoCard from "../Cotizacionesjs/CotizacionDetalles/CotizacionInfoCard";
 import { SendEmailModal, EditCotizacionModal, ResultModal } from "../Cotizacionesjs/CotizacionDetalles/CotizacionModals";
-import { updateCotizacion } from "../../../apis/ApisServicioCliente/CotizacionApi";
+import { updateCotizacion} from "../../../apis/ApisServicioCliente/CotizacionApi";
 import "./cotizar.css";
 
 const { Title, Text } = Typography;
@@ -31,7 +31,7 @@ const CotizacionDetalles = () => {
   
   
   // Obtenemos datos de la cotización mediante nuestro custom hook
-  const { cotizacionInfo, servicios, tipoMoneda, tipoCambioDolar, loading,refetch } = useCotizacionDetails(id);
+  const { cotizacionInfo, servicios, tipoMoneda, tipoCambioDolar, loading,refetch , AllCotizacion} = useCotizacionDetails(id);
   
   // Calcular si es USD y el factor de conversión
   const esUSD = tipoMoneda?.id === 2;
@@ -49,10 +49,9 @@ const CotizacionDetalles = () => {
   const updateEstadoCotizacion=async (nuevoEstado)=>{
     try{
       const cotizacionData = {
-        ...cotizacionInfo,  // Mantén el resto de los datos intactos
         estado: nuevoEstado,  // Actualiza solo el estado
       };
-      const response = await updateCotizacion(cotizacionInfo.id, cotizacionData); // Enviar la actualización al backend
+      const response = await updateCotizacion(id, cotizacionData); // Enviar la actualización al backend
       setCotizacionInfo(response.data);  // Actualiza el estado en el frontend
       refetch();
     }catch(error){
@@ -119,7 +118,7 @@ const CotizacionDetalles = () => {
       <Menu.Item key="1" icon={<MailTwoTone />} onClick={() => setIsModalVisible(true)}>
         Enviar por correo
       </Menu.Item>
-      <Menu.Item key="3" icon={<EditTwoTone />} onClick={() => navigate(`/EditarCotizacion/${cotizacionInfo?.id}`)}>
+      <Menu.Item key="3" icon={<EditTwoTone />} onClick={() => navigate(`/EditarCotizacion/${cotizacionInfo?.idCotizacion}`)}>
         Editar
       </Menu.Item>
       <Menu.Item key="4" icon={<CheckCircleTwoTone />} onClick={() => {  updateEstadoCotizacion(2) }}>

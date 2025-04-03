@@ -34,7 +34,7 @@ const Home = () => {
             </Col>
             <Col xs={24} sm={12} md={8} lg={6} xl={4} className="col-style">
               <div>
-                <Link to="/CustodiaExterna">
+                <Link to="/custodiaExterna">
                   <Card className="card-custom" title="Custodia Externa" bordered={false}>
                     <div className="icon-container">
                     {/* <FileTextOutlined />*/}

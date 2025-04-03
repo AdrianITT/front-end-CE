@@ -1,7 +1,7 @@
 // src/components/CotizacionModals.js
 import React from "react";
 import { Modal, Form, Input, Checkbox, Button, Result, Select } from "antd";
-import { ExclamationCircleOutlined } from "@ant-design/icons";
+//import { ExclamationCircleOutlined } from "@ant-design/icons";
 
 export const SendEmailModal = ({
   visible,

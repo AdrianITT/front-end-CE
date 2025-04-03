@@ -16,20 +16,19 @@ import {
   Switch,
   InputNumber,
   ConfigProvider,
-  Radio
 } from 'antd';
 import moment from "moment";
-import { useParams, useNavigate, data } from "react-router-dom";
+import { useParams, useNavigate} from "react-router-dom";
 import { CheckOutlined, CloseOutlined,DownOutlined } from '@ant-design/icons';
 import { createCustodiaExterna, getCustodiaExternaById, updateCustodiaExterna } from '../../../apis/ApiCustodiaExterna/ApiCustodiaExtern';
-import { createMuestra, getMuestraById, getAllMuestra, updateMuestra } from '../../../apis/ApiCustodiaExterna/ApiMuestra';
+import { createMuestra, updateMuestra } from '../../../apis/ApiCustodiaExterna/ApiMuestra';
 import { createpreservadormuestra } from '../../../apis/ApiCustodiaExterna/ApiPreservadorMuestra';
 import { getAllOrdenesTrabajo,getOrdenTrabajoById } from '../../../apis/ApisServicioCliente/OrdenTrabajoApi';
 import { getAllPrioridad } from '../../../apis/ApiCustodiaExterna/ApiPrioridad';
 import {getAllContenedor} from '../../../apis/ApiCustodiaExterna/ApiContenedor'
 import { getAllPreservador } from '../../../apis/ApiCustodiaExterna/ApiPreservador';
 import { getAllMatriz } from '../../../apis/ApiCustodiaExterna/ApiMatriz';
-import { getAllClave } from '../../../apis/ApiCustodiaExterna/ApiClave';
+//import { getAllClave } from '../../../apis/ApiCustodiaExterna/ApiClave';
 import { getAllParametro } from '../../../apis/ApiCustodiaExterna/ApiParametros';
 import { getAlldataordentrabajo } from '../../../apis/ApisServicioCliente/DataordentrabajoApi';
 import { getCustodiaExternaDataById } from '../../../apis/ApiCustodiaExterna/ApiCustodiaExternaData';
@@ -51,19 +50,19 @@ const CrearCustodiaExterna = () => {
   const [ordenSeleccionada, setOrdenSeleccionada] = useState(null);
   const MAX_PRESERVADORES = 3;
   const modificacionDeLaOrdenDeTrabajo=Form.useWatch("modificacionDeLaOrdenDeTrabajo", form);
-  const asesoriaGestionAmbiental=Form.useWatch("asesoriaGestionAmbiental", form);
+  //const asesoriaGestionAmbiental=Form.useWatch("asesoriaGestionAmbiental", form);
   const [ordenesTrabajo, setOrdenesTrabajo] = useState([]);
   const [prioridades, setPrioridades] = useState([]);
   const [contenedores, setContenedores] = useState([]);
   const [preservadores, setPreservadores] = useState([]);
-  const [claves, setClaves] = useState([]);
+  //const [claves, setClaves] = useState([]);
   const [matrices, setMatrices] = useState([]);
   const [parametros, setParametros] = useState([]);
-  const [tipoMuestras, setTipoMuestra] = useState(null);
+  const [tipoMuestras, setTipoMuestra] = useState([]);
   const [dataOrdenTrabajo, setDataOrdenTrabajo] = useState(null);
   const [Filtros, setFiltros] = useState([]);
-  const [muestras, setMuestras] = useState([]);
-  const [custodia, setCustodia] = useState(null);
+  //const [muestras, setMuestras] = useState([]);
+  //const [custodia, setCustodia] = useState(null);
   const [receptor, setReceptor] = useState(null);
   const [receptores, setReceptores] = useState([]);
 
@@ -94,6 +93,12 @@ const CrearCustodiaExterna = () => {
             asesoriaGestionAmbiental: custodia["solicitudDeAsesoriaEnGestionAmbiental"],
             observaciones: custodia["observaciones"] || "",
             receptorCam: custodia["receptor"].id || "",
+            tipoMuestra: [
+              custodia["muestraCompuesta"] ? 2 : null,
+              custodia["muestraPuntual"] ? 1 : null,
+            ].filter(Boolean),
+            idCompuesta: custodia["idMuestraCompuesta"] || null,
+            idPuntual: custodia["idMuestraPuntual"] || null,
           });
 
         },0);
@@ -124,7 +129,7 @@ const CrearCustodiaExterna = () => {
           }));
 
         
-          setMuestras(muestrasFormateadas);
+          //setMuestras(muestrasFormateadas);
           setBitacoras(muestrasFormateadas.map((muestra) => muestra.id));
           setActiveKey(muestrasFormateadas.map((_, idx) => idx));
           form.setFieldsValue({ bitacoras: muestrasFormateadas });
@@ -252,9 +257,9 @@ const CrearCustodiaExterna = () => {
       .then(res => setMatrices(res.data))
       .catch(err => console.error("Error al obtener matrices:", err));
 
-    getAllClave()
+    /*getAllClave()
       .then(res => setClaves(res.data))
-      .catch(err => console.error("Error al obtener claves:", err));
+      .catch(err => console.error("Error al obtener claves:", err));*/
     getAllParametro()
       .then(res => setParametros(res.data))
       .catch(err => console.error("Error al obtener matrices:", err));
@@ -291,6 +296,10 @@ const CrearCustodiaExterna = () => {
         puestoCargoContacto:values.puestoCargoContacto,
         correoContacto:values.correoDelContacto,
         celularContacto:values.celularDelContacto,
+        muestraCompuesta: values.tipoMuestra?.includes(2) || false,
+        idMuestraCompuesta: values.idCompuesta || null,
+        muestraPuntual: values.tipoMuestra?.includes(1) || false,
+        idMuestraPuntual: values.idPuntual || null,
         estado:1,
       };
       let custodiaId;
@@ -319,7 +328,6 @@ const CrearCustodiaExterna = () => {
           filtro: bitacora.filtro,
           matriz: bitacora.matriz,
           contenedor: bitacora.contenedor,
-          tipoMuestra: bitacora.tipoMuestra?.[0] || null, // Es un array, tomamos el valor único
           parametro: bitacora.parametro,
           custodiaExterna: custodiaId,
         };
@@ -479,7 +487,7 @@ const CrearCustodiaExterna = () => {
           <InputNumber />
         </Form.Item>
         </Col>
-          <Row gutter={16}>
+          {/* <Row gutter={16}>
             <Col span={24}>
             <Form.Item label="Tipo de muestra" name={['bitacoras', index, 'tipoMuestra']}>
             <Checkbox.Group >
@@ -490,7 +498,7 @@ const CrearCustodiaExterna = () => {
 
               
             </Col>
-          </Row>
+          </Row>*/}
       </Row>
     </Panel>
   );
@@ -648,7 +656,7 @@ const CrearCustodiaExterna = () => {
                   </div>
                 )}
                 {receptor && (
-                  <Card title="Receptor" style={{ marginBottom: 17 }}>
+                  <Card title="Receptor asignado" style={{ marginBottom: 17 }}>
                     <Descriptions column={1}>
                       <Descriptions.Item label="Receptor">
                         {receptor.nombrePila} {receptor.apPaterno} {receptor.apMaterno}
@@ -792,13 +800,13 @@ const CrearCustodiaExterna = () => {
                   </Col>
                 </Row>
 
-                <Row gutter={16} style={{ marginBottom: 16 }}>
+               {/*  <Row gutter={16} style={{ marginBottom: 16 }}>
                   <Col span={8}>
                     <Form.Item label="Dirigir información a:" name="dirigirInformacion">
                       <Input />
                     </Form.Item>
                   </Col>
-                </Row>
+                </Row>*/}
 
                 <Row gutter={16} style={{ marginBottom: 16 }}>
                   <Col span={8}>
@@ -807,6 +815,31 @@ const CrearCustodiaExterna = () => {
                     </Form.Item>
                   </Col>
                 </Row>
+                <Card title="Tipo de Muestras" style={{ display: 'inline-block', marginBottom: 16 }}>
+                  <Row gutter={16}>
+                    <Col span={24}>
+                      <Form.Item label="Tipo de muestra" name="tipoMuestra">
+                        <Checkbox.Group onChange={(checkedValues) => setTipoMuestra(checkedValues)}>
+                          <Checkbox value={2}>Muestra Compuesta</Checkbox>
+                          <Checkbox value={1}>Muestra Puntual</Checkbox>
+                        </Checkbox.Group>
+                      </Form.Item>
+
+                      {tipoMuestras.includes(2) && (
+                        <Form.Item label="ID Compuesta" name="idCompuesta" rules={[{ required: true, message: 'Ingresa el ID de la muestra compuesta' }]}>
+                          <Input />
+                        </Form.Item>
+                      )}
+
+                      {tipoMuestras.includes(1) && (
+                        <Form.Item label="ID Puntual" name="idPuntual" rules={[{ required: true, message: 'Ingresa el ID de la muestra puntual' }]}>
+                          <Input />
+                        </Form.Item>
+                      )}
+                    </Col>
+                  </Row>
+                </Card>
+
                <Form.Item style={{ marginTop: 17, textAlign: 'right' }}>
                   <Button type="primary" htmlType="submit">
                     {id ? 'Actualizar Custodia' : 'Crear Custodia'}

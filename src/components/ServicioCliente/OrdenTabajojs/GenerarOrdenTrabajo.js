@@ -240,13 +240,14 @@ const GenerarOrdenTrabajo = () => {
     formModal.resetFields(); // Limpia el formulario del modal
   };
 
-  const handleRemoveConcepto = (id) => {
-      if (servicios.length > 1) {
-        setServicios(servicios.filter((concepto) => concepto.id !== id));
-      } else {
-        message.warning("Debe haber al menos un concepto.");
-      }
-    };
+  const handleRemoveConcepto = (indexToRemove) => {
+    if (servicios.length > 1) {
+      setServicios((prev) => prev.filter((_, index) => index !== indexToRemove));
+    } else {
+      message.warning("Debe haber al menos un concepto.");
+    }
+  };
+  
 
 
 
