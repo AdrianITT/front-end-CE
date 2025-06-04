@@ -1,13 +1,15 @@
-import React, { useEffect, useState } from "react";
-import { Form, Input, Button, Row, Col, Select, message, Modal, Result, Divider } from "antd";
+import React, { useEffect, useState, useMemo } from "react";
+import { Form, Input, Button, Row, Col, Select, message, Modal, Result, Divider,Alert } from "antd";
 import { useNavigate, useParams } from "react-router-dom"; // Importa useNavigate
 import "./Cliente.css";
-import { updateCliente, getClienteById } from "../../../apis/ApisServicioCliente/ClienteApi";
+import { updateCliente, getClienteById, getClienteDataById, getAllClienteData } from "../../../apis/ApisServicioCliente/ClienteApi";
 import { getAllTitulo } from '../../../apis/ApisServicioCliente/TituloApi';
 import { getAllUsoCDFI } from '../../../apis/ApisServicioCliente/UsocfdiApi'; // Asegúrate de que este API esté implementada correctamente
+import {descifrarId}  from "../secretKey/SecretKey";
+import { validarAccesoPorOrganizacion } from "../validacionAccesoPorOrganizacion";
 
 const EditarCliente = () => {
-  const { clienteId } = useParams();  // Obtén el id desde la URL
+  const { clienteIds } = useParams();  // Obtén el id desde la URL
   const navigate = useNavigate(); // Hook para manejar navegación
   const [clienteData, setClienteData] = useState(null);  // Guardar los datos del cliente
   const [loading, setLoading] = useState(true);  // Estado de carga
@@ -15,44 +17,103 @@ const EditarCliente = () => {
   const [titulos, setTitulos] = useState([]);
   const [usoCfdiOptions, setUsoCfdiOptions] = useState([]);  // Opciones de UsoCfdi
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false); // Estado del modal de éxito
+  const organizationId = useMemo(() => parseInt(localStorage.getItem("organizacion_id"), 10), []);
+  const clienteId =descifrarId(clienteIds);
+  const id=clienteId;
+
+  useEffect(() => {
+      const verificar = async () => {
+        console.log("hola");
+        console.log(id);
+        const acceso = await validarAccesoPorOrganizacion({
+          fetchFunction: getAllClienteData,
+          organizationId,
+          id,
+          campoId: "id",
+          navigate,
+          mensajeError: "Acceso denegado a esta precotización.",
+        });
+        console.log(acceso);
+        if (!acceso) return;
+        // continuar...
+      };
+  
+      verificar();
+    }, [organizationId, clienteId]);
 
   // Obtén los datos del cliente cuando el componente se monta
   useEffect(() => {
     const fetchCliente = async () => {
       try {
-        const response = await getClienteById(clienteId);  // Realiza la llamada a la API para obtener los datos
-        setClienteData(response.data);  // Establece los datos del cliente
-        setLoading(false);  // Cambia el estado de carga
+        // const clientesResp = await getAllClienteData(organizationId);  // 👈 trae todos los clientes
+
+        // console.log("clientesResp",clientesResp);
+        
+        // const idsPermitidos = clientesResp.data.map((c) => String(c.id));  // 👈 importante: convertir a string para comparación con URL
+        // console.log("idsPermitidos",idsPermitidos);
+  
+        // if (idsPermitidos.length > 0 && !idsPermitidos.includes(clienteId)) {
+        //   message.error("No tienes autorización para editar este cliente.");
+        //   navigate("/no-autorizado");
+        //   return;
+        // }
+  
+        // ✅ Ya verificado, ahora sí obtenemos y mostramos los datos del cliente
+        const response = await getClienteById(clienteId);
+        const cliente = response.data;
+        setClienteData(cliente);
+        form.setFieldsValue(cliente);
+  
+        const direccionRes = await getClienteDataById(clienteId);
+        const direccion = direccionRes.data;
+  
+        const direccionActual = form.getFieldsValue(["calleCliente", "numeroCliente"]);
+        const sinDireccion = !direccionActual.calleCliente || !direccionActual.numeroCliente;
+  
+        if (sinDireccion && direccion?.cliente?.empresa) {
+          form.setFieldsValue({
+            calleCliente: direccion.cliente.empresa.calle || "",
+            numeroCliente: direccion.cliente.empresa.numero || "",
+            coloniaCliente: direccion.cliente.empresa.colonia || "",
+            ciudadCliente: direccion.cliente.empresa.ciudad || "",
+            estadoCliente: direccion.cliente.empresa.estado || "",
+            codigoPostalCliente: direccion.cliente.empresa.codigoPostal || "",
+          });
+        }
+  
       } catch (error) {
-        console.error("Error al obtener los datos del cliente", error);
+        console.error("Error al validar o cargar cliente:", error);
+        message.error("Error al validar el cliente");
+        navigate("/no-autorizado");  // Redirige también si ocurre un error grave
+      } finally {
         setLoading(false);
-        message.error("Error al cargar los datos del cliente");
       }
     };
-
+  
     const fetchTitulos = async () => {
       try {
         const response = await getAllTitulo();
-        setTitulos(response.data);  // Guardar los títulos en el estado
+        setTitulos(response.data);
       } catch (error) {
-        console.error('Error al cargar los títulos:', error);
+        console.error("Error al cargar los títulos:", error);
       }
     };
-
+  
     const fetchUsoCfdi = async () => {
       try {
-        const response = await getAllUsoCDFI(); // Obtén las opciones de UsoCfdi desde la API
-        setUsoCfdiOptions(response.data); // Almacena las opciones
+        const response = await getAllUsoCDFI();
+        setUsoCfdiOptions(response.data);
       } catch (error) {
-        console.error('Error al cargar los Usos de CFDI:', error);
+        console.error("Error al cargar los Usos de CFDI:", error);
         message.error("Error al cargar los Usos de CFDI");
       }
     };
-
-    fetchCliente();
+  
+    fetchCliente();      // 🔐 ahora con validación
     fetchTitulos();
     fetchUsoCfdi();
   }, [clienteId]);
+  
 
   useEffect(() => {
     if (clienteData) {
@@ -177,9 +238,18 @@ const EditarCliente = () => {
               <Input placeholder="fax" />
             </Form.Item>
           </Col>
+          <Col span={12}>
+          <Form.Item
+            label="Sub - Division"
+            name="division"
+          >
+            <Input placeholder="division" />
+          </Form.Item>
+          </Col>
         </Row>
         <Row gutter={30}>
-            <Divider>Direccion del cliente</Divider>
+            <Divider>Direccion del cliente<Alert message="se muestra la misma direccion de la empresa cuando el cliente es nuevo" type="warning" /></Divider>
+            
               <Col span={12}>
                 <Form.Item
                   label="Calle:"
@@ -189,7 +259,7 @@ const EditarCliente = () => {
                   <Input />
                 </Form.Item>
                 <Form.Item
-                  label="Numero externo:"
+                  label="Numero externo/interior:"
                   name="numeroCliente"
                   rules={[{ required: true, message: 'Número requerido' }]}
                 >
@@ -227,7 +297,6 @@ const EditarCliente = () => {
                 </Form.Item>
               </Col>
           </Row>
-
         {/* Campo para seleccionar UsoCfdi 
         <Row gutter={16}>
           <Col span={12}>

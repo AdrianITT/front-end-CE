@@ -46,6 +46,9 @@ const Cotizar = () => {
     [filteredData, cotizaciones]
   );
 
+  
+  
+
   return (
     <div className="cotizar-container">
       <center>
@@ -85,7 +88,6 @@ const Cotizar = () => {
             bordered
             pagination={{
               pageSize: 10,
-              showSizeChanger: true,
             }}
           />
 

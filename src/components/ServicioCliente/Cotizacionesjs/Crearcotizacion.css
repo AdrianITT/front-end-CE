@@ -34,11 +34,11 @@
    }
    /* Estilo de las totales y botones de acción */
 .cotizacion-totals-buttons {
-    display: flex;
-    flex-direction: column; /* o row, según cómo desees el layout */
-    align-items: center; /* centra horizontalmente */
-    justify-content: center; /* centra verticalmente, si es necesario */
-    margin-top: 24px;
+     text-justify: center;
+     justify-items: center;
+     justify-content: space-between;
+     align-items: center;
+     margin-top: 24px;
    }
    .cotizacion-totals p {
      font-size: 16px;
@@ -46,10 +46,8 @@
    }
    /* Botones flotantes */
 .cotizacion-action-buttons {
-    display: flex;
-    align-items: center;
-    justify-content: center; /* Esto centra los botones horizontalmente */
-    gap: 16px; /* Opcional: para agregar espacio entre los botones */
+     display: flex;
+     align-items: center;
    }
    .margin-button {
      margin-top: 10px;

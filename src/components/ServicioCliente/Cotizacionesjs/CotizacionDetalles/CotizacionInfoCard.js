@@ -1,6 +1,8 @@
 import React from "react";
 import { Card, Row, Col, Typography, Button, Dropdown } from "antd";
 import { Link } from "react-router-dom";
+import { FileAddOutlined, FilePdfOutlined } from "@ant-design/icons";
+import { cifrarId } from "../../secretKey/SecretKey";
 
 const { Text } = Typography;
 
@@ -57,22 +59,30 @@ const CotizacionInfoCard = ({
       </Col>
 
       <Col span={8}>
-        {cotizacionInfo?.estado?.id > 1 && (
-          <Card
-            title="Órdenes"
-            bordered
-            extra={
-              <Link to={`/GenerarOrdenTrabajo/${cotizacionInfo.idCotizacion}`}>
-                <Button
-                  type="primary"
-                  style={{ backgroundColor: "#13c2c2", borderColor: "#13c2c2" }}
-                >
-                  Crear Orden de Trabajo
-                </Button>
-              </Link>
-            }
-          />
-        )}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          {cotizacionInfo?.estado?.id > 1 && (
+            <Link to={`/GenerarOrdenTrabajo/${cifrarId(cotizacionInfo.idCotizacion)}`}>
+              <Button
+                type="primary"
+                
+                size="middle"
+                style={{ backgroundColor: '#13c2c2' }}
+              >Orden de Trabajo</Button>
+            </Link>
+          )}
+          
+          {cotizacionInfo?.estado?.id > 1 && (
+            <Link to={`/CrearFactura/${cifrarId(cotizacionInfo.idCotizacion)}`}>
+              <Button
+                type="primary"
+                
+                size="middle"
+                style={{ backgroundColor: '#1890ff' }}
+              >Facturacion</Button>
+            </Link>
+          )}
+        </div>
+
 
         <Card
           title="Cuenta"
@@ -85,23 +95,23 @@ const CotizacionInfoCard = ({
         >
           <p>
             <Text strong>Subtotal:</Text>{" "}
-            {(valores.subtotal / factorConversion).toFixed(2)} {moneda}
+            {(valores.subtotal / factorConversion).toFixed(3)} {moneda}
           </p>
           <p>
             <Text strong>Descuento:</Text>{" "}
-            {(valores.valorDescuento / factorConversion).toFixed(2)} {moneda}
+            {(valores.valorDescuento / factorConversion).toFixed(3)} {moneda}
           </p>
           <p>
             <Text strong>Subtotal con descuento:</Text>{" "}
-            {(valores.subtotalDescuento / factorConversion).toFixed(2)} {moneda}
+            {(valores.subtotalDescuento / factorConversion).toFixed(3)} {moneda}
           </p>
           <p>
             <Text strong>IVA ({(parseFloat(valores.iva) * 100).toFixed(0)}%):</Text>{" "}
-            {(valores.ivaValor / factorConversion).toFixed(2)} {moneda}
+            {(valores.ivaValor / factorConversion).toFixed(3)} {moneda}
           </p>
           <p>
             <Text strong>Importe total:</Text>{" "}
-            {(valores.importe / factorConversion).toFixed(2)} {moneda}
+            {(valores.importe / factorConversion).toFixed(3)} {moneda}
           </p>
           <p>
             <Text strong>Estado:</Text>{" "}

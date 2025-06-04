@@ -1,26 +1,26 @@
 import React, { useState, useEffect,useMemo} from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { MailTwoTone, CheckCircleTwoTone, FilePdfTwoTone, FormOutlined, DeleteOutlined } from "@ant-design/icons";
+import { MailTwoTone, CheckCircleTwoTone, FilePdfTwoTone, FormOutlined, DeleteOutlined,EditTwoTone  } from "@ant-design/icons";
 import { Card, Table, Row, Col, Typography, Spin, message, Menu,Dropdown,Button, Form, Checkbox, Input, Modal, Result, Popconfirm } from "antd";
-import { getPreCotizacionById,updatePrecotizacion, deletePrecotizar} from "../../../apis/ApisServicioCliente/PrecotizacionApi";
-import { getAllServicioPrecotizacion } from "../../../apis/ApisServicioCliente/ServiciosPrecotizacionApi";
-import { getServicioById } from "../../../apis/ApisServicioCliente/ServiciosApi";
-import { getIvaById } from "../../../apis/ApisServicioCliente/ivaApi";
+import { getAllPrecotizacionCreate,updatePrecotizacion, deletePrecotizar} from "../../../apis/ApisServicioCliente/PrecotizacionApi";
 import { Api_Host } from "../../../apis/api";
-import { getInfoSistema } from "../../../apis/ApisServicioCliente/InfoSistemaApi";
-import {getEstadoById} from "../../../apis/ApisServicioCliente/EstadoApi";
+import {getAllDataPrecotizacion, getAllPrecotizacionByOrganizacion} from "../../../apis/ApisServicioCliente/PrecotizacionApi";
+import {validarAccesoPorOrganizacion} from "../validacionAccesoPorOrganizacion";
+import { getAllcotizacionesdata } from "../../../apis/ApisServicioCliente/CotizacionApi";
+import { cifrarId, descifrarId } from "../secretKey/SecretKey";
 
 const { Title, Text } = Typography;
 
 const PreCotizacionDetalles = () => {
-  const { id } = useParams(); // Obtener el ID desde la URL
+  const { ids } = useParams(); // Obtener el ID desde la URL
+  const id= descifrarId(ids);
   const [loading, setLoading] = useState(true);
   const [cotizacionInfo, setCotizacionInfo] = useState(null);
   const [servicios, setServicios] = useState([]);
   const [ivaPorcentaje, setIvaPorcentaje] = useState(null);
   const [tipoCambioDolar, setTipoCambioDolar] = useState(1);
   //const [serviciosPreCotizacion, setServiciosPreCotizacion] = useState([]);
-  const esUSD = cotizacionInfo?.tipoMoneda === 2; // Suponiendo que el ID 2 corresponde a USD
+  const esUSD = cotizacionInfo?.tipoMoneda?.id === 2; // Suponiendo que el ID 2 corresponde a USD
   const factorConversion = esUSD ? tipoCambioDolar : 1;
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isResultModalVisible, setIsResultModalVisible] = useState(false);
@@ -29,86 +29,53 @@ const PreCotizacionDetalles = () => {
   const [estadoNombre, setEstadoNombre] = useState("Cargando...");
   const [isConfirmModalVisible, setIsConfirmModalVisible] = useState(false);
   const [isSuccessModalVisible, setIsSuccessModalVisible] = useState(false);
+  const [numeros,setaNumeros]=useState([]);
   const navigate=useNavigate();
+  // Obtener el ID de la organización una sola vez
+  const organizationId = useMemo(() => parseInt(localStorage.getItem("organizacion_id"), 10), []);
 
   useEffect(() => {
-    const fetchCotizacion = async () => {
+    const verificar = async () => {
+    
+      const acceso = await validarAccesoPorOrganizacion({
+        fetchFunction: getAllPrecotizacionByOrganizacion ,
+        organizationId,
+        id,
+        campoId: "precotizacionId",
+        navigate,
+        mensajeError: "Acceso denegado a esta precotización.",
+      });
+      console.log(acceso);
+      if (!acceso) return;
+      // continuar...
+    };
+
+    verificar();
+  }, [organizationId, id]);
+  
+
+  useEffect(() => {
+    const fetchData = async () => {
       try {
-        const response = await getPreCotizacionById(id);
-        setCotizacionInfo(response.data);
-        // ✅ Obtener el estado por su ID
-      if (response.data.estado) {
-          try {
-            const estadoResp = await getEstadoById(response.data.estado);
-            setEstadoNombre(estadoResp.data.nombre);
-          } catch (error) {
-            console.error("Error obteniendo el estado:", error);
-            setEstadoNombre("Desconocido"); // En caso de error
-          }
-        }
+        const response = await getAllDataPrecotizacion(id);
+        const data = response.data;
+        console.log("Pre-Cotización Detalles:", data);   
+        setaNumeros(data.numero);
+        setCotizacionInfo(data); // contiene empresa, cliente, moneda, iva, etc.
+        setServicios(data.precotizacionservicios); // contiene los servicios listos
+        setIvaPorcentaje(parseFloat(data.iva.porcentaje) || 0); // Ej. "0.00" -> 0
+  
       } catch (error) {
-        message.error("Error al obtener la pre-cotización.");
-        console.error("Error al obtener la pre-cotización:", error);
+        console.error("Error al obtener datos de la pre-cotización:", error);
+        message.error("Error al cargar los datos completos.");
+      } finally {
+        setLoading(false);
       }
     };
 
-    const fetchServicios = async () => {
-     try {
-       // Obtener todos los servicios de la pre-cotización
-       const response = await getAllServicioPrecotizacion(); // Obtiene todos los registros
-       
-       // Filtrar solo aquellos que correspondan a la pre-cotización actual
-       const serviciosFiltrados = response.data.filter(servicio => servicio.preCotizacion === Number(id));
-   
-       // Obtener los nombres de los servicios desde la tabla de servicios
-       const serviciosEnriquecidos = await Promise.all(
-         serviciosFiltrados.map(async (servicio) => {
-           try {
-             const servicioInfo = await getServicioById(servicio.servicio);
-             return {
-               ...servicio,
-               nombreServicio: servicioInfo.data.nombreServicio, // Agregar el nombre del servicio
-             };
-           } catch (error) {
-             console.error(`Error al obtener el nombre del servicio ID ${servicio.servicio}`, error);
-             return { ...servicio, nombreServicio: "Desconocido" }; // Si falla, asigna un valor por defecto
-           }
-         })
-       );
-   
-       setServicios(serviciosEnriquecidos);
-     } catch (error) {
-       message.error("Error al obtener los servicios de la pre-cotización.");
-       console.error("Error al obtener los servicios:", error);
-     }
-   };
-
-   const fetchIva = async () => {
-     if (cotizacionInfo?.iva) { // Verifica que exista el ID de IVA
-       try {
-         const response = await getIvaById(cotizacionInfo.iva);
-         setIvaPorcentaje(response.data.porcentaje); // Guarda el porcentaje de IVA
-       } catch (error) {
-         console.error("Error al obtener el porcentaje de IVA:", error);
-         setIvaPorcentaje("Desconocido"); // Valor por defecto en caso de error
-       }
-     }
-   };
-   const fetchTipoCambio = async () => {
-     try {
-       const response = await getInfoSistema();
-       const tipoCambio = parseFloat(response.data[0].tipoCambioDolar);
-       setTipoCambioDolar(tipoCambio);
-     } catch (error) {
-       console.error("Error al obtener el tipo de cambio del dólar", error);
-     }
-   };
-   fetchTipoCambio();
-   fetchIva();
-   
-
-    Promise.all([fetchCotizacion(), fetchServicios()]).finally(() => setLoading(false));
-  }, [id,cotizacionInfo?.iva]);
+    fetchData();
+  }, [id]);
+  
 
   
 
@@ -126,42 +93,74 @@ const PreCotizacionDetalles = () => {
   const totalConvertido = total / factorConversion;
 
   const columnsServicios = [
-    { title: "ID", dataIndex: "id", key: "id" },
+    { title: "Nombre del Servicio", dataIndex: "servicioNombre", key: "servicioNombre" },
     { title: "Descripción", dataIndex: "descripcion", key: "descripcion" },
     { title: "Cantidad", dataIndex: "cantidad", key: "cantidad" },
     { title: "Precio", dataIndex: "precio", key: "precio" },
-    { title: "Subtotal", key: "subtotal", render: (record) => (record.cantidad * record.precio).toFixed(2) },
+    {
+      title: "Subtotal",
+      render: (_, record) => `${(record.precio * record.cantidad).toFixed(3)}`
+    },
   ];
+
+  useEffect(() => {
+    if (loading) {
+      document.body.style.cursor = "wait";
+    } else {
+      document.body.style.cursor = "default";
+    }
   
-  // Obtener el ID de la organización una sola vez
-     const organizationId = useMemo(() => parseInt(localStorage.getItem("organizacion_id"), 10), []);
+    // Limpieza al desmontar
+    return () => {
+      document.body.style.cursor = "default";
+    };
+  }, [loading]);
+  
+
 
   //DESCARGA DEL PDF
-    const handleDownloadPDF = async () => {
-      setLoading(true); // Activar el estado de carga
-    
-      try {
-        // Obtener el user_id desde el localStorage
-        const user_id = localStorage.getItem("user_id");
-
-        
-    
-        // Abrir el PDF en una nueva pestaña, incluyendo el user_id como parámetro
-        window.open(`${Api_Host.defaults.baseURL}/precotizacion/${id}/pdf/?user_id=${user_id}&organizacion_id=${organizationId}`);
-    
-        // Si la respuesta es exitosa, puedes procesarla
-        message.success("PDF descargado correctamente");
-      } catch (error) {
-        console.error("Error al descargar el PDF:", error);
-        message.error("Hubo un error al descargar el PDF");
-      } finally {
-        setLoading(false); // Desactivar el estado de carga
+  const handleDownloadPDF = async () => {
+    setLoading(true); // Activar el estado de carga
+  
+    try {
+      const user_id = localStorage.getItem("user_id");
+  
+      const response = await fetch(`${Api_Host.defaults.baseURL}/precotizacion/${id}/pdf`, {
+        method: "GET",
+        headers: {
+          // "Authorization": `Bearer ${localStorage.getItem("token")}` si aplica
+        },
+      });
+  
+      if (!response.ok) {
+        throw new Error("No se pudo descargar el PDF");
       }
-    };
+  
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+  
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "precotizacion.pdf");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+  
+      window.URL.revokeObjectURL(url);
+  
+      message.success("PDF descargado correctamente");
+    } catch (error) {
+      console.error("Error al descargar el PDF:", error);
+      message.error("Hubo un error al descargar el PDF");
+    } finally {
+      setLoading(false); // Desactivar el estado de carga
+    }
+  };
+  
 
     const actualizarEstado = async () => {
       if (!cotizacionInfo) {
-        message.error("No se encontró la cotización.");
+        getAllPrecotizacionCreate(id);
         return;
       }
       
@@ -170,25 +169,51 @@ const PreCotizacionDetalles = () => {
     
     const handleConfirmChange = async () => {
       try {
-        const nuevaCotizacion = {
-          ...cotizacionInfo,
-          estado: 7, // Nuevo estado
-        };
+        setLoading(true);
+        // Espera de 5 segundos
+        await new Promise((resolve) => setTimeout(resolve, 5000));
     
-        const response = await updatePrecotizacion(cotizacionInfo.id, nuevaCotizacion);
-        setCotizacionInfo(response.data);
-        setIsConfirmModalVisible(false); // 👉 Cerrar modal
+        if (cotizacionInfo.estado.id == 10) {
+          await getAllPrecotizacionCreate(id);
+          await updatePrecotizacion(id, {
+            estado: 9,
+          });
+    
+          setCotizacionInfo((prev) => ({
+            ...prev,
+            estado: 9,
+          }));
+        } else {
+          await getAllPrecotizacionCreate(id);
+          await updatePrecotizacion(id, {
+            estado: 7,
+          });
+    
+          setCotizacionInfo((prev) => ({
+            ...prev,
+            estado: 7,
+          }));
+        }
+    
+        setIsConfirmModalVisible(false);
         setIsSuccessModalVisible(true);
+    
         setTimeout(() => {
           setIsSuccessModalVisible(false);
           navigate("/cotizar");
         }, 1000);
+    
         message.success("Estado actualizado correctamente.");
       } catch (error) {
         console.error("Error al actualizar el estado:", error);
         message.error("No se pudo actualizar el estado.");
+      }finally{
+        setLoading(false);
+        
       }
     };
+    
+    
 
    const showEmailModal = () => {
      setIsModalVisible(true);
@@ -278,16 +303,22 @@ const PreCotizacionDetalles = () => {
         </Menu.Item>
     
         {/* ✅ Solo se muestra si el estado es 8 */}
-        {cotizacionInfo?.estado === 8 ? (
+        {cotizacionInfo?.estado?.id === 8||10 ? (
+          <>
           <Menu.Item key="4" icon={<CheckCircleTwoTone twoToneColor="#52c41a" />} onClick={actualizarEstado}>
             Actualizar estado
           </Menu.Item>
-        ):(<Link to="/cotizar"><Menu.Item key="4" icon={<FormOutlined  twoToneColor="#52c41a" />} >
-          Ir a Cotizacion
-        </Menu.Item></Link>)}
+          <Menu.Item key="8" icon={<EditTwoTone /> }>
+          <Link to={`/editarPreCotizacion/${cifrarId(id)}`}>
+          Editar Pre-cotización</Link>
+          </Menu.Item>
+          </>
+        ):(<Menu.Item key="4" icon={<FormOutlined  twoToneColor="#52c41a" />} >
+          <Link to="/cotizar">Ir a Cotizacion</Link>
+        </Menu.Item>)}
     
         <Menu.Item key="5" icon={<FilePdfTwoTone />} onClick={handleDownloadPDF} loading={loading} >
-          Ver PDF
+          Descargar PDF
         </Menu.Item>
         <Menu.Item key="6" icon={<DeleteOutlined style={{ color: 'red' }}/>}  >
           
@@ -306,19 +337,19 @@ const PreCotizacionDetalles = () => {
   return (
     <Spin spinning={loading}>
       <div className="cotizacion-detalles-container">
-        <Title level={2}>Detalles de la Pre-Cotización #{id}</Title>
+        <Title level={2}>Detalles de la Pre-Cotización #{numeros}</Title>
         {cotizacionInfo && (
           <Row gutter={16}>
             <Col span={12}>
               <Card title="Información de la Pre-Cotización">
-                <p><Text strong>Empresa:</Text> {cotizacionInfo.nombreEmpresa}</p>
-                <p><Text strong>Cliente:</Text> {cotizacionInfo.nombreCliente} {cotizacionInfo.apellidoCliente}</p>
-                <p><Text strong>Denominación:</Text> {cotizacionInfo.denominacion}</p>
+                <p><Text strong>Empresa:</Text> {cotizacionInfo.empresa?.nombre}</p>
+                <p><Text strong>Cliente:</Text> {cotizacionInfo.cliente?.nombreCompleto}</p>
+                <p><Text strong>Correo:</Text> {cotizacionInfo.cliente?.correo}</p>
+                <p><Text strong>telefono:</Text> {cotizacionInfo.cliente?.telefonocelular || "No disponible"}</p>
+                <p><Text strong>Denominación:</Text> {cotizacionInfo.tipoMoneda?.descripcion}-{cotizacionInfo.empresa?.denominacion}</p>
                 <p><Text strong>Fecha de Solicitud:</Text> {cotizacionInfo.fechaSolicitud}</p>
-                <p><Text strong>Fecha de Caducidad:</Text> {cotizacionInfo.fechaCaducidad}</p>
-                <p><Text strong>Descuento:</Text> {cotizacionInfo.descuento}%</p>
-                <p><Text strong>IVA:</Text>{ivaPorcentaje ? `${ivaPorcentaje}%` : "Cargando..."}</p>
-                <p><Text strong>Estado:</Text> {estadoNombre}</p>
+                <p><Text strong>IVA:</Text> {cotizacionInfo.iva?.porcentaje || "0"}%</p>
+                <p><Text strong>Estado:</Text> {cotizacionInfo.estado.nombre}</p>
               </Card>
             </Col>
             {/* ✅ Nueva Card: Resumen Financiero */}
@@ -335,18 +366,24 @@ const PreCotizacionDetalles = () => {
                   }
                 >               
                
-               <p><Text strong>Subtotal:</Text> {subtotalConvertido.toFixed(2)} {esUSD ? "USD" : "MXN"}</p>
-               <p><Text strong>Descuento ({cotizacionInfo?.descuento || 0}%):</Text> {descuentoConvertido.toFixed(2)} {esUSD ? "USD" : "MXN"}</p>
-               <p><Text strong>Subtotal con Descuento:</Text> {subtotalConDescuentoConvertido.toFixed(2)} {esUSD ? "USD" : "MXN"}</p>
-               <p><Text strong>IVA ({ivaPorcentaje * 100 || 0}%):</Text> {ivaConvertido.toFixed(2)} {esUSD ? "USD" : "MXN"}</p>
-               <p><Text strong>Total:</Text> {totalConvertido.toFixed(2)} {esUSD ? "USD" : "MXN"}</p>
+               <p><Text strong>Subtotal:</Text> {cotizacionInfo.valores.subtotal} {esUSD ? "USD" : "MXN"}</p>
+               <p><Text strong>Descuento ({cotizacionInfo.valores.descuento || 0}%):</Text> {descuentoConvertido.toFixed(3)} {esUSD ? "USD" : "MXN"}</p>
+               <p><Text strong>Subtotal con Descuento:</Text> {cotizacionInfo.valores.subtotalDescuento} {esUSD ? "USD" : "MXN"}</p>
+               <p><Text strong>IVA ({cotizacionInfo.valores.iva}%):</Text> {cotizacionInfo.valores.ivaValor} {esUSD ? "USD" : "MXN"}</p>
+               <p><Text strong>Total:</Text> {cotizacionInfo.valores.importe} {esUSD ? "USD" : "MXN"}</p>
                </Card>
                </Col>
           </Row>
         )}
 
         <Title level={3} style={{ marginTop: 20 }}>Servicios Relacionados</Title>
-        <Table dataSource={servicios} columns={columnsServicios} rowKey="id" bordered pagination={false} />
+        <Table
+          dataSource={servicios}
+          columns={columnsServicios}
+          rowKey="precotizacionservicioId"
+          bordered
+          pagination={false}
+        />
       </div>
       <Modal
           title="Enviar Cotización"
@@ -387,21 +424,27 @@ const PreCotizacionDetalles = () => {
       </Modal>
 
       {/* Modal de confirmación para actualizar el estado */}
+      <div style={{ cursor: loading ? "wait" : "default" }}>
       <Modal
         title="Confirmar actualización"
         open={isConfirmModalVisible}
         onCancel={() => setIsConfirmModalVisible(false)}
         footer={[
-          <Button key="cancel" onClick={() => setIsConfirmModalVisible(false)}>
+          <Button key="cancel" onClick={() => setIsConfirmModalVisible(false)}
+          disabled={loading}
+          loading={loading}>
             Cancelar
           </Button>,
-          <Button key="confirm" type="primary" onClick={handleConfirmChange}>
+          <Button key="confirm" type="primary" onClick={handleConfirmChange}
+          disabled={loading}
+          loading={loading}>
             Sí, actualizar estado
           </Button>,
         ]}
       >
+        
         <p>¿Estás seguro de que deseas actualizar el estado de la cotización?</p>
-      </Modal>
+      </Modal></div>
 
       {/* Modal de Éxito */}
       <Modal

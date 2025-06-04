@@ -1,18 +1,28 @@
-import { useState, useEffect } from "react";
-import { getDetallecotizaciondataById, getCotizacionById } from "../../../../apis/ApisServicioCliente/CotizacionApi";
+import { useState, useEffect, useMemo } from "react";
+import { getDetallecotizaciondataById, getCotizacionById, getAllCotizacionByCliente, getAllcotizacionesdata } from "../../../../apis/ApisServicioCliente/CotizacionApi";
+import { useNavigate } from "react-router-dom";
 
 export const useCotizacionDetails = (id) => {
+  const navigate = useNavigate();
   const [cotizacionInfo, setCotizacionInfo] = useState([]);
   const [loading, setLoading] = useState(false);
   const [servicios, setServicios] = useState([]);
   const [AllCotizacion, setalldata] = useState([]);
+  const [cotizacionesCliente, setCotizacionesCliente] = useState([]);
+  const organizationId = useMemo(() => parseInt(localStorage.getItem("organizacion_id"), 10), []);
 
   const fetchData = async () => {
     setLoading(true);
     try {
+      const clientesResp = await getAllcotizacionesdata(organizationId);  // 👈 trae todos los clientes
+      const idsPermitidos = clientesResp.data.map((c) => String(c.Cotización));  // 👈 importante: convertir a string para comparación con URL
+
+      if (idsPermitidos.length > 0 && !idsPermitidos.includes(id)) {
+        navigate("/no-autorizado");
+      }
       const response = await getDetallecotizaciondataById(id);
       const data = response.data;
-        console.log("data: ", data);
+        //console.log("data: ", data);
       // Puedes darle formato si lo necesitas
       setCotizacionInfo({
         ...data,
@@ -30,11 +40,17 @@ export const useCotizacionDetails = (id) => {
       });
       // 🔥 AQUÍ extraes los servicios
       setServicios(data.cotizacionServicio || []);
+      const cotizacionesResponse = await getAllCotizacionByCliente(organizationId);
+      setCotizacionesCliente(cotizacionesResponse.data || []);
       const respons2= await getCotizacionById(id);
       const datas = respons2.data;
       setalldata({...datas});
     } catch (error) {
       console.error("❌ Error al obtener detalles de cotización:", error);
+      const status = error.response?.status;
+       if (status === 403 || status === 404|| status === 500) {
+         return navigate("/no-autorizado", { replace: true });
+       }
     } finally {
       setLoading(false);
     }
@@ -49,6 +65,7 @@ export const useCotizacionDetails = (id) => {
     loading,
     servicios,
     AllCotizacion,
+    cotizacionesCliente,
     refetch: fetchData,
   };
 };

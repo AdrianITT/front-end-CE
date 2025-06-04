@@ -1,13 +1,13 @@
 // src/components/Cliente.js
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Tabs, Input, Button, Modal, Form, Spin, Table, Checkbox, Result, Row, Col, Select, Divider } from "antd";
+import { Tabs, Input, Button, Modal, Form, Spin, Table, Checkbox, Result, Row, Col, Select, Divider} from "antd";
 import StickyBox from "react-sticky-box";
 import { useNavigate } from "react-router-dom";
 import {ExclamationCircleOutlined } from "@ant-design/icons";
 import ClienteTable from "./ClienteTable";
-import { createEmpresas } from "../../../apis/ApisServicioCliente/EmpresaApi";
+import { createEmpresas,getEmpresaById } from "../../../apis/ApisServicioCliente/EmpresaApi";
 import { useCatalogos } from "../Clientejs/useCatalogos";
-import { getAllCliente, createCliente, deleteCliente } from "../../../apis/ApisServicioCliente/ClienteApi";
+import { getAllCliente, createCliente, deleteCliente, getAllClienteData } from "../../../apis/ApisServicioCliente/ClienteApi";
 import { getAllTitulo } from "../../../apis/ApisServicioCliente/TituloApi";
 import "./Cliente.css";
 
@@ -34,33 +34,31 @@ const Cliente = () => {
   // Función para cargar clientes desde la API y formatearlos para la tabla
   const loadClientes = useCallback(async () => {
     try {
-      //Obtener todas las empresas de la organizacion
-      const empresaDeLaOrganizacion=empresas.filter(empresa=> empresa.organizacion===organizationId)
-
-      const res = await getAllCliente();
-
-      //Filtrar los clientes que pertenecen a las empresas de la organizacion
-      const clientesFiltrados = res.data.filter(cliente=> empresaDeLaOrganizacion.some(empresa=>empresa.id===cliente.empresa));
-      // Se formatean los clientes: se calcula un flag "incompleto" si faltan datos
-      const clientesFormateados = clientesFiltrados.map((cliente) => {
+      const res = await getAllClienteData(organizationId); // <-- nueva función
+      //console.log(res.data);
+      const clientesFormateados = res.data.map((cliente) => {
         const datosIncompletos =
-          !cliente.nombrePila || !cliente.apPaterno || !cliente.empresa||!cliente.codigoPostalCliente;
+          !cliente.nombrePila || !cliente.apPaterno || !cliente.empresa?.nombre || !cliente.empresa.codigoPostal || !cliente.codigopostalcliente;
+
         return {
           key: cliente.id,
+          numero: cliente.numero,
+          division: cliente.division,
           Cliente: `${cliente.nombrePila || "Sin nombre"} ${cliente.apPaterno || ""} ${cliente.apMaterno || ""}`,
-          Empresa: empresas.find((e) => e.id === cliente.empresa)?.nombre || "Empresa no encontrada",
+          Empresa: cliente.empresa?.nombre || "Empresa no encontrada",
           Correo: cliente.correo || "Sin correo",
           activo: cliente.activo,
           incompleto: datosIncompletos,
         };
       });
-      // Ordenar los clientes, mostrando primero aquellos con datos incompletos
+  
       const sortedClientes = clientesFormateados.sort((a, b) => b.incompleto - a.incompleto);
       setClientes(sortedClientes);
     } catch (error) {
-      console.error("Error al cargar los clientes", error);
+      console.error("Error al cargar los clientes desde getAllClienteData", error);
     }
-  }, [empresas, organizationId ]);
+  }, [organizationId]);
+  
 
   useEffect(() => {
     if (empresas.length > 0) { // Solo cargar clientes si las empresas ya están cargadas
@@ -128,6 +126,7 @@ const Cliente = () => {
   // Función para crear un cliente (y crear empresa si es necesario)
   const createClientAndReturnId = async (formValues, createCompanyFlag) => {
     let empresaId = formValues.empresa;
+    //console.log("formValues: ", formValues);
     if (createCompanyFlag) {
       const empresaData = {
         nombre: formValues.nombre,
@@ -135,7 +134,7 @@ const Cliente = () => {
         regimenFiscal: parseInt(formValues.regimenFiscal, 10),
         condicionPago: formValues.condicionPago,
         calle: formValues.calle,
-        numero: formValues.numero,
+        numeroExterior: formValues.numeroExterior,
         colonia: formValues.colonia,
         ciudad: formValues.ciudad,
         codigoPostal: formValues.codigoPostal,
@@ -151,7 +150,28 @@ const Cliente = () => {
         return null;
       }
     }
-  
+    let direccionEmpresaNuevo = {
+      calle: "",
+      numeroExterior: "",
+      colonia: "",
+      ciudad: "",
+      codigoPostal: "",
+      estado: "",
+    };
+    //console.log("formValues: ", formValues);
+    if(!formValues.calle && !formValues.numeroExterior && !formValues.colonia && !formValues.ciudad && !formValues.codigoPostal && !formValues.estado){
+      const empresaData = await getEmpresaById(empresaId);
+      direccionEmpresaNuevo = {
+        calle: empresaData.data.calle,
+        numeroExterior: empresaData.data.numeroExterior,
+        colonia: empresaData.data.colonia,
+        ciudad: empresaData.data.ciudad,
+        codigoPostal: empresaData.data.codigoPostal,
+        estado: empresaData.data.estado,
+      };
+    }
+    //console.log("direccionEmpresaNuevo: ", direccionEmpresaNuevo);
+
     const clienteData = {
       nombrePila: formValues.nombrePila,
       apPaterno: formValues.apPaterno,
@@ -162,12 +182,13 @@ const Cliente = () => {
       fax: formValues.fax || "No disponible",
       empresa: empresaId,
       titulo: formValues.titulo,
-      calleCliente: formValues.calleCliente,
-      numeroCliente: formValues.numeroCliente,
-      coloniaCliente: formValues.coloniaCliente,
-      ciudadCliente: formValues.ciudadCliente,
-      codigoPostalCliente: formValues.codigoPostalCliente,
-      estadoCliente: formValues.estadoCliente,
+      calleCliente: formValues?.calleCliente || direccionEmpresaNuevo.calle,
+      numeroCliente: formValues?.numeroCliente || direccionEmpresaNuevo.numeroExterior,
+      coloniaCliente: formValues?.coloniaCliente || direccionEmpresaNuevo.colonia,
+      ciudadCliente: formValues?.ciudadCliente || direccionEmpresaNuevo.ciudad,
+      codigoPostalCliente: formValues?.codigoPostalCliente || direccionEmpresaNuevo.codigoPostal,
+      estadoCliente: formValues?.estadoCliente || direccionEmpresaNuevo.estado,
+      division:formValues.SubDivision,
     };
   
     if (!clienteData.nombrePila || !clienteData.apPaterno || !clienteData.correo || !clienteData.empresa) {
@@ -331,7 +352,7 @@ const Cliente = () => {
               <Form.Item
                 label="Correo Electrónico:"
                 name="correo"
-                rules={[{ required: true, message: "Por favor ingresa un correo electrónico." }]}
+                rules={[{type:'email', message: 'El correo no es válido'},{ required: true, message: "Por favor ingresa un correo electrónico." }]}
               >
                 <Input placeholder="Correo electrónico" />
               </Form.Item>
@@ -344,10 +365,17 @@ const Cliente = () => {
               <Form.Item label="Fax:" name="fax">
                 <Input placeholder="Fax" />
               </Form.Item>
+              <Form.Item
+                label="Sub - Division"
+                name="SubDivision"
+              >
+                <Input placeholder="subDivision" />
+              </Form.Item>
             </Col>
           </Row>
           <Row gutter={30}>
             <Divider>Direccion del cliente</Divider>
+            
               <Col span={12}>
                 <Form.Item
                   label="Calle:"
@@ -357,7 +385,7 @@ const Cliente = () => {
                   <Input />
                 </Form.Item>
                 <Form.Item
-                  label="Numero externo:"
+                  label="Numero externo/interior:"
                   name="numeroCliente"
                   //rules={[{ required: true, message: 'Número requerido' }]}
                 >
@@ -468,7 +496,10 @@ const Cliente = () => {
                   <Form.Item
                     label="RFC:"
                     name="rfc"
-                    rules={[{ required: true, message: "Por favor ingresa el RFC." }]}
+                    rules={[{ required: true, message: "Por favor ingresa el RFC." },
+                      { len: 13, message: 'Debe tener 13 caracteres' },
+                      {pattern: /^[A-Z]+$/, message:'Solo letras mayúsculas permitidas'}
+                    ]}
                   >
                     <Input placeholder="Ingrese RFC" />
                   </Form.Item>
@@ -482,9 +513,11 @@ const Cliente = () => {
                     <Input placeholder="Calle" />
                   </Form.Item>
                   <Form.Item
-                    label="Número:"
-                    name="numero"
-                    rules={[{ required: true, message: "Por favor ingresa el número." }]}
+                    label="Número externo:"
+                    name="numeroExterior"
+                    rules={[{ required: true, message: "Por favor ingresa el número." },
+                      { pattern: /^\d+$/, message: 'Sólo dígitos permitidos' },
+                    ]}
                   >
                     <Input placeholder="Número" />
                   </Form.Item>
@@ -505,14 +538,17 @@ const Cliente = () => {
                   <Form.Item
                     label="Código Postal:"
                     name="codigoPostal"
-                    rules={[{ required: true, message: "Por favor ingresa el código postal." }]}
+                    rules={[{ required: true, message: "Por favor ingresa el código postal." },
+                      { len: 5, message: 'Debe tener 5 caracteres' },
+                      { pattern: /^\d+$/, message: 'Sólo dígitos permitidos' },
+                    ]}
                   >
                     <Input placeholder="Código Postal" />
                   </Form.Item>
                   <Form.Item
                     label="Estado:"
                     name="estado"
-                    rules={[{ required: true, message: "Por favor ingresa el estado." }]}
+                    rules={[{ required: true, message: "Por favor ingresa el estado." },]}
                   >
                     <Input placeholder="Estado" />
                   </Form.Item>

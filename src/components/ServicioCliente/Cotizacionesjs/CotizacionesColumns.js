@@ -2,14 +2,17 @@
 import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Button, Menu } from "antd";
+import { cifrarId } from "../secretKey/SecretKey";
 
 // Custom hook para definir las columnas de la tabla de cotizaciones
 export const useCotizacionesColumns = () => {
   const columnsCotizaciones = useMemo(() => [
     {
       title: "Cotización",
-      dataIndex: "Cotización",
-      key: "Cotización",
+      dataIndex: "numero",
+      key: "numero",
+      
+      defaultSortOrder: "ascend",
       render: (text) => <span className="cotizacion-text">{text}</span>,
     },
     {
@@ -84,7 +87,7 @@ export const useCotizacionesColumns = () => {
       title: "Acción",
       key: "action",
       render: (_, record) => (
-        <Link to={`/detalles_cotizaciones/${record["Cotización"]}`}>
+        <Link to={`/detalles_cotizaciones/${cifrarId(record["Cotización"])}`}>
           <Button type="primary" className="detalles-button">
             Detalles
           </Button>

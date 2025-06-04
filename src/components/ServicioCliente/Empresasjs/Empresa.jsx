@@ -5,7 +5,7 @@ import { ExclamationCircleOutlined } from '@ant-design/icons';
 import './Empresa.css';
 
 
-import { getAllEmpresas, createEmpresas, deleteEmpresa, updateEmpresa, getEmpresaById } from '../../../apis/ApisServicioCliente/EmpresaApi';
+import { getAllEmpresas, createEmpresas, deleteEmpresa, updateEmpresa, getEmpresaById, getAllEmpresasData } from '../../../apis/ApisServicioCliente/EmpresaApi';
 import { getAllRegimenFiscal } from '../../../apis/ApisServicioCliente/Regimenfiscla';
 import { getAllUsoCDFI } from '../../../apis/ApisServicioCliente/UsocfdiApi';
 
@@ -37,39 +37,43 @@ const Empresa = () => {
 
   // NUEVO: Estado para almacenar los usos CFDI
   const [usosCfdi, setUsosCfdi] = useState([]);
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
+  const [errorModalMessage, setErrorModalMessage] = useState("");
+
 
   // Cargar lista de empresas
   const loadEmpresas = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getAllEmpresas();
-      const allData = res.data || [];
-      // Filtra por organización (si lo necesitas)
-      const userOrganizationId = localStorage.getItem("organizacion_id");
-      const filtered = allData.filter(e => e.organizacion === parseInt(userOrganizationId));
-      
-      // Prepara data para la tabla
-      const dataTabla = filtered.map((empresa) => {
-        const incompleta = !empresa.calle || !empresa.numero || !empresa.colonia
-          || !empresa.ciudad || !empresa.estado || !empresa.codigoPostal;
+      const userOrganizationId = parseInt(localStorage.getItem("organizacion_id"), 10);
+      const res = await getAllEmpresasData(userOrganizationId); // NUEVO ENDPOINT
+  
+      const dataTabla = res.data.map((empresa) => {
+        const incompleta =
+          !empresa.calle || !empresa.numeroExterior || !empresa.colonia ||
+          !empresa.ciudad || !empresa.estado || !empresa.codigoPostal;
+  
         return {
           key: empresa.id,
+          numero:empresa.numero,
           Empresa: empresa.nombre,
           RFC: empresa.rfc,
-          Direccion: `${empresa.calle || ''} ${empresa.numero || ''}, ${empresa.colonia || ''}, ${empresa.ciudad || ''}, ${empresa.estado || ''}, ${empresa.codigoPostal || ''}`,
-          incompleta
+          Direccion: empresa.direccioncompleta || "Sin dirección",
+          Organizacion: empresa.organizacion || "No disponible",
+          incompleta,
         };
       });
-
-      // Ordenar para que primero aparezcan las incompletas
+  
+      // Ordenar para mostrar primero las incompletas
       dataTabla.sort((a, b) => b.incompleta - a.incompleta);
       setEmpresas(dataTabla);
     } catch (error) {
-      console.error("Error al cargar las empresas:", error);
+      console.error("Error al cargar empresas desde getAllEmpresasData:", error);
     } finally {
-      setLoading(false); // Desactiva el spinner, haya o no error
+      setLoading(false);
     }
   }, []);
+  
 
   // Cargar régimen fiscal
   const loadRegimenFiscal = useCallback(async () => {
@@ -106,19 +110,38 @@ const Empresa = () => {
     try {
       const userOrgId = parseInt(localStorage.getItem("organizacion_id"));
       const payload = { ...values, organizacion: userOrgId };
+  
+      const nombreDuplicado = empresas.some((e) =>
+        e.Empresa.toLowerCase().trim() === payload.nombre.toLowerCase().trim()
+      );
+      const rfcDuplicado = empresas.some((e) =>
+        e.RFC.toLowerCase().trim() === payload.rfc.toLowerCase().trim()
+      );
+  
+      if (nombreDuplicado || rfcDuplicado) {
+        setErrorModalMessage(
+          nombreDuplicado
+            ? "Ya existe una empresa con ese nombre."
+            : "Ya existe una empresa con ese RFC."
+        );
+        setErrorModalVisible(true);
+        return;
+      }
+  
       const response = await createEmpresas(payload);
       if (response && response.data) {
         message.success("Empresa creada correctamente");
         setIsModalOpen(false);
         setIsSuccessModalOpen(true);
-        form.resetFields(); // Limpia el formulario
-        loadEmpresas();     // Refresca la tabla
+        form.resetFields();
+        loadEmpresas();
       }
     } catch (error) {
       console.error("Error al crear la empresa:", error);
       message.error("Error al crear la empresa");
     }
   };
+  
 
   // 3. ABRIR modal de editar
   const handleOpenEdit = async (id) => {
@@ -232,6 +255,20 @@ const Empresa = () => {
       >
         <p>¡La operación se ha realizado correctamente!</p>
       </Modal>
+      <Modal
+        title="Error de Creacion"
+        open={errorModalVisible}
+        onOk={() => setErrorModalVisible(false)}
+        onCancel={() => setErrorModalVisible(false)}
+        footer={[
+          <Button key="ok" type="primary" onClick={() => setErrorModalVisible(false)}>
+            Cerrar
+          </Button>
+        ]}
+      >
+        <p>{errorModalMessage}</p>
+      </Modal>
+
     </Spin></div>
   );
 };

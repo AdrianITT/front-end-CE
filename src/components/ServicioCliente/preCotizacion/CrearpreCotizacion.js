@@ -1,21 +1,23 @@
 import React, { useState, useEffect, useMemo } from "react";
 import "../Cotizacionesjs/Crearcotizacion.css";
 //import "./Crearcotizacion.css";
-import { Form, Input, Button, Row, Col, Select, Checkbox, Divider, message, DatePicker, Card, Modal, Alert } from "antd";
+import { Form, Input, Button, Row, Col, Select, Checkbox, Divider, message, DatePicker, Card, Modal, Alert,InputNumber, Spin } from "antd";
 import dayjs from "dayjs";
 import { useParams, useNavigate } from "react-router-dom";
 import { getAllTipoMoneda } from "../../../apis/ApisServicioCliente/Moneda";
 import { getAllIva } from "../../../apis/ApisServicioCliente/ivaApi";
-import { getAllServicio } from "../../../apis/ApisServicioCliente/ServiciosApi";
-import { createPreCotizacion } from "../../../apis/ApisServicioCliente/PrecotizacionApi";
+import { getServicioData } from "../../../apis/ApisServicioCliente/ServiciosApi";
+import { createPreCotizacion} from "../../../apis/ApisServicioCliente/PrecotizacionApi";
 import { createServicioPreCotizacion } from "../../../apis/ApisServicioCliente/ServiciosPrecotizacionApi";
 import { getInfoSistema } from "../../../apis/ApisServicioCliente/InfoSistemaApi";
 import { getAllEmpresas } from "../../../apis/ApisServicioCliente/EmpresaApi";
-import { getAllCliente } from "../../../apis/ApisServicioCliente/ClienteApi";
+//import { getAllCliente } from "../../../apis/ApisServicioCliente/ClienteApi";
 import { getAllMetodo,createMetodo} from "../../../apis/ApisServicioCliente/MetodoApi";
 import {createServicio} from "../../../apis/ApisServicioCliente/ServiciosApi";
 import { getAllUnidadCDFI } from "../../../apis/ApisServicioCliente/unidadcdfiApi";
 import { getAllClaveCDFI } from "../../../apis/ApisServicioCliente/ClavecdfiApi";
+import {getUserById}from "../../../apis/ApisServicioCliente/UserApi";
+//import ErrorModal from "./PreCotizacionesModal/PreCotizacionModal";
 
 const { TextArea } = Input;
 
@@ -43,6 +45,7 @@ const CrearPreCotizaciones = () => {
   const [conceptos, setConceptos] = useState([
     { id: 1, servicio: "", cantidad: 1, precio: 0, precioFinal: 0, descripcion: "" },
   ]);
+  const [conceptosParaEliminar, setConceptosParaEliminar] = useState([]);
   const [messageApi, contextHolder] = message.useMessage();
   const [isNuevoServicioModalVisible, setIsNuevoServicioModalVisible] = useState(false);
   const [isModalOpenMetodos, setIsModalOpenMetodos] = useState(false);
@@ -50,11 +53,15 @@ const CrearPreCotizaciones = () => {
   const [metodoSeleccionado, setMetodoSeleccionado] = useState(null);
   const [formMetodo] = Form.useForm();
   const [successMessage, setSuccessMessage] = useState(""); // Mensaje dinámico
-    const [isSuccessModalVisible, setIsSuccessModalVisible] = useState(false);
+  const [isSuccessModalVisible, setIsSuccessModalVisible] = useState(false);
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
+  const [errorModalText, setErrorModalText] = useState("");
+  const [loadings, setLoadings] = useState(false);
+
 
   // Obtener el ID de la organización una sola vez
   const organizationId = useMemo(() => parseInt(localStorage.getItem("organizacion_id"), 10), []);
-
+  
 
     useEffect(() => {
       const fetchDatosModal = async () => {
@@ -81,12 +88,13 @@ const CrearPreCotizaciones = () => {
     }, []);
   const fetchServicios = async () => {
     try {
-      const response = await getAllServicio();
+      const response = await getServicioData(organizationId);
       //console.log("Servicios recibidos:", response.data);
       // Filtra los que no tengan `id`
       const validServices = Array.isArray(response.data)
         ? response.data.filter(s => s && s.id)
         : [];
+      //console.log("Servicios válidos:", validServices);
       setServicios(validServices);
     } catch (error) {
       console.error("Error al cargar los servicios", error);
@@ -146,7 +154,7 @@ const CrearPreCotizaciones = () => {
     };
     const fetchServicios = async () => {
       try {
-        const response = await getAllServicio();
+        const response = await getServicioData(organizationId);
         setServicios(response.data);
       } catch (error) {
         console.error("Error al cargar los servicios", error);
@@ -209,6 +217,8 @@ const CrearPreCotizaciones = () => {
               servicio: servicioSeleccionado.id,
               precio: servicioSeleccionado.precio || 0,
               precioFinal: concepto.precioFinal || servicioSeleccionado.precio || 0, 
+              metodoRelacionado: servicioSeleccionado.metodos || null,
+              metodoCodigo: servicioSeleccionado.metodos || null,
             }
           : concepto
       );
@@ -258,6 +268,10 @@ const CrearPreCotizaciones = () => {
 
   
   const handleSubmit = async () => {
+    setLoadings(true);
+    const idLocalUser = localStorage.getItem("user_id")
+    const userResponse = await getUserById(idLocalUser);
+    let usrNameData=userResponse.data.first_name + " " + userResponse.data.last_name;
     try {
       // Validar campos del formulario
       await form.validateFields();
@@ -268,38 +282,9 @@ const CrearPreCotizaciones = () => {
       }
   
       // Obtener todos los clientes y empresas existentes
-      const clientesExistentes = await getAllCliente();
+      //const clientesExistentes = await getAllCliente();
       const empresasExistentes = await getAllEmpresas();
-  
-      // Verificar si el cliente ya existe
-      const clienteExistente = clientesExistentes.data.find(
-        (cliente) =>
-          cliente.nombrePila === nombre && cliente.apPaterno === apellido
-      );
-  
-      // Verificar si la empresa ya existe
-      const empresaExistente = empresasExistentes.data.find(
-        (emp) => emp.nombre === empresa
-      );
-  
-      // Si el cliente o la empresa ya existen, mostrar un error y detener el proceso
-      if (clienteExistente) {
-        message.error("El cliente ya existe.");
-        //console.log('el cliente existe');
-        const textCont='el Cliente ya existe';
-        error(textCont);
-        return;
-      }
-  
-      if (empresaExistente) {
-        
-        message.error("La empresa ya existe.");
-        //console.log('la empresa ya existe');
-        const textEmpresa='La empresa ya existe';
-        error(textEmpresa);
-        return;
-      }
-  
+
       // Si no existen, continuar con la creación de la pre-cotización
       const dataPrecotizacion = {
         nombreEmpresa: empresa,
@@ -314,6 +299,7 @@ const CrearPreCotizaciones = () => {
         organizacion: organizationId,
         tipoMoneda: tipoMonedaSeleccionada,
         estado: 8,
+        nombreusuario:usrNameData,
       };
   
       // ✅ 1. Crear la Pre-Cotización y obtener el ID
@@ -325,33 +311,27 @@ const CrearPreCotizaciones = () => {
         //console.log("✅ Pre-cotización creada con ID:", preCotizacionId);
   
         // ✅ 2. Insertar los servicios de la Pre-Cotización
-        const serviciosPromises = conceptos.map(async (concepto) => {
-          if (!concepto.servicio) {
-            console.warn(`⚠️ Concepto con ID ${concepto.id} no tiene servicio seleccionado.`);
-            return;
-          }
-  
+        for (const concepto of conceptos) {
+          if (!concepto.servicio) continue;
+        
           const servicioData = {
             descripcion: concepto.descripcion || "Sin descripción",
-            precio: Number(concepto.precioFinal) || 0,
-            cantidad: Number(concepto.cantidad) || 0,
+            precio:      Number(concepto.precioFinal) || 0,
+            cantidad:    Number(concepto.cantidad)   || 0,
             preCotizacion: preCotizacionId,
-            servicio: concepto.servicio,
+            servicio:    concepto.servicio,
+            organizacion: organizationId,
           };
+        
+          try {
+            await createServicioPreCotizacion(servicioData);
+          } catch (err) {
+            console.error(`Error al agregar servicio ${concepto.servicio}:`, err);
+            message.error(`Error al agregar servicio ${concepto.servicio}`);
+          }
+        }
   
-          //console.log("📤 Enviando servicio:", servicioData);
-  
-          return createServicioPreCotizacion(servicioData)
-            .then((res) => {
-              //console.log(`✅ Servicio ${concepto.servicio} agregado con éxito.`);
-            })
-            .catch((err) => {
-              console.error(`❌ Error al agregar servicio ${concepto.servicio}:`, err.response?.data || err);
-              message.error(`Error al agregar servicio ${concepto.servicio}`);
-            });
-        });
-  
-        await Promise.all(serviciosPromises);
+        //await Promise.all(serviciosPromises);
   
         message.success("Pre-cotización y servicios creados exitosamente.");
         navigate("/precotizacion");
@@ -367,37 +347,46 @@ const CrearPreCotizaciones = () => {
       } else {
         message.error("Error al enviar los datos. Revisa la consola para más detalles.");
       }
+    }finally {
+      setLoadings(false);
     }
   };
-    const handleOkMetodos = async () => {
-        try {
-          // Recoger los datos del formulario (lo que el usuario ha ingresado)
-          const values = await formMetodo.validateFields(); // Usando Antd form.validateFields para obtener los valores
-      
-          // Verificar si todos los datos necesarios están presentes
-          if (!values.codigo ) {
-            message.error("Por favor, complete todos los campos obligatorios.");
-            return;
-          }
-      
-          // Enviar los datos a la API
-          const response = await createMetodo(values);  // Llamamos a la función que envía los datos
-      
-          // Actualizamos la lista de métodos después de la creación
-          setMetodos(prevMetodos => [...prevMetodos, response]);
-          
-          // Cerrar el modal
-          setIsModalOpenMetodos(false);
-          // 🔹 Mostrar modal de éxito
-          setSuccessMessage("¡El servicio ha sido creado exitosamente!");
-          setIsSuccessModalVisible(true);
-    
-          setIsModalOpenMetodos(false); // Cerrar modal de creación
-          message.success("Método creado con éxito.");
-        } catch (error) {
-          message.error("Error al crear el método.");
+
+  const handleOkMetodos = async () => {
+    setLoadings(true);
+      try {
+        // Recoger los datos del formulario (lo que el usuario ha ingresado)
+        const values = await formMetodo.validateFields(); // Usando Antd form.validateFields para obtener los valores
+        const dataToSend = {
+          ...values,
+          organizacion: organizationId,   // <-- aquí
+        };
+        // Verificar si todos los datos necesarios están presentes
+        if (!values.codigo ) {
+          message.error("Por favor, complete todos los campos obligatorios.");
+          return;
         }
-      };
+    
+        // Enviar los datos a la API
+        const response = await createMetodo(dataToSend);  // Llamamos a la función que envía los datos
+    
+        // Actualizamos la lista de métodos después de la creación
+        setMetodos(prevMetodos => [...prevMetodos, response]);
+        
+        // Cerrar el modal
+        setIsModalOpenMetodos(false);
+        // 🔹 Mostrar modal de éxito
+        setSuccessMessage("¡El servicio ha sido creado exitosamente!");
+        setIsSuccessModalVisible(true);
+  
+        setIsModalOpenMetodos(false); // Cerrar modal de creación
+        message.success("Método creado con éxito.");
+      } catch (error) {
+        message.error("Error al crear el método.");
+      }finally {
+        setLoadings(false);
+      }
+    };
   
   const handleCancelMetodos = () => {
     setIsModalOpenMetodos(false);
@@ -408,292 +397,293 @@ const CrearPreCotizaciones = () => {
   const handleMetodoChange = (value) => {
     setMetodoSeleccionado(value);
   };
+  
 
   return (
     <div className="cotizacion-container">
-      <h1 className="cotizacion-title">Registro de Pre-Cotización</h1>
-      <Form 
-      layout="vertical"
-      form={form}
-      >
+      <Spin spinning={loadings} tip="Cargando datos...">
+        <h1 className="cotizacion-title">Registro de Pre-Cotización</h1>
+        <Form 
+        layout="vertical"
+        form={form}
+        >
 
-        <div className="cotizacion-info-message">
-          <strong>Por favor, complete todos los campos requeridos con la información correcta.</strong>
-        </div>
-     <Row gutter={16}>
-          <Col span={12}>
-               <Form.Item
-                    label="Nombre"
-                    name="nombre"
-                    rules={[
-                    {
-                         required: true,
-                    },
-                    ]}
-               >
-                    <Input value={nombre}
-                    onChange={(e) => setNombre(e.target.value)}/>
-               </Form.Item>
-          </Col>
-          <Col span={12}>
-               <Form.Item
-                    label="Apellido"
-                    name="Apellido"
-                    rules={[
-                    {
-                    required: true,
-                    },
-                    ]}
-               >
-                    <Input value={apellido} 
-                    onChange={(e) => setApellido(e.target.value)}/>
-               </Form.Item>
-          </Col>
-     </Row>
-     <Row gutter={16}>
-          <Col span={12}>
-               <Form.Item
-                    label="Nombre de Empresa"
-                    name="empresa"
-                    rules={[
-                    {
-                    required: true,
-                    },
-                    ]}
-               >
-                    <Input value={empresa} 
-                    onChange={(e) => setEmpresa(e.target.value)}/>
-               </Form.Item></Col>
-               <Col span={12}>
-               <Form.Item
-                    label="Correo"
-                    name="correo"
-                    rules={[
-                    {
-                    required: true,
-                    },
-                    ]}
-               >
-                    <Input value={correos} 
-                    onChange={(e) => setCorreo(e.target.value)}/>
-               </Form.Item>
-          </Col>
-     </Row>
-
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item label="Fecha Solicitada" rules={[{ required: true, message: 'Por favor ingresa la fecha.' }]}>
-              <DatePicker
-                value={fechaSolicitada}
-                onChange={handleFechaSolicitadaChange}
-                format="DD/MM/YYYY"
-                style={{ width: "100%" }}
-              />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item label="Fecha Caducidad" rules={[{ required: true, message: 'Por favor ingresa la fecha.' }]}>
-              <DatePicker
-                value={fechaCaducidad}
-                format="DD/MM/YYYY"
-                style={{ width: "100%" }}
-                placeholder="Calculada automáticamente"
-              />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item label="Tipo de Moneda" rules={[{ required: true, message: 'Por favor selecciona el tipo de moneda.' }]}>
-              <Select
-                value={tipoMonedaSeleccionada}
-                onChange={(value) => setTipoMonedaSeleccionada(value)}
-              >
-                {tiposMonedaData.map((moneda) => (
-                  <Select.Option key={moneda.id} value={moneda.id}>
-                    {moneda.codigo} - {moneda.descripcion}
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item label="Tasa del IVA actual" rules={[{ required: true, message: 'Por favor selecciona el IVA.' }]}>
-              <Select
-                value={ivaSeleccionado}
-                onChange={(value) => setIvaSeleccionado(value)}
-              >
-                {ivasData.map((ivas) => (
-                  <Select.Option key={ivas.id} value={ivas.id}>
-                    {ivas.porcentaje}%
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Form.Item label="Descuento (%)" rules={[{ required: true, message: 'Por favor ingresa el descuento.' }]}>
-          <Input
-            type="number"
-            min="0"
-            max="100"
-            defaultValue={0}
-            value={descuento}
-            onChange={(e) => setDescuento(parseFloat(e.target.value))}
-          />
-        </Form.Item>
-
-        <Divider>Agregar Conceptos</Divider>
-          <Row>
-            <div style={{ padding: '10px' }}>
-            <Button size="large" onClick={() => setIsNuevoServicioModalVisible(true)}>
-              Crear un Nuevo Servicio
-            </Button>
-            </div>
-            <div style={{ padding: '10px' }}>
-            <Button size="large" onClick={showModalMetodos}>
-              Crear un Nuevo Metodo
-            </Button>
-            </div>
-          </Row>
-        
-        {conceptos.map((concepto, index) => (
-          <div key={concepto.id}><Card>
-            <h3>Concepto {concepto.id}</h3>
-            <Row justify="end">
-              <div >
-                <Checkbox onChange={() => handleRemoveConcepto(concepto.id)}>
-                  Eliminar
-                </Checkbox>
-              </div>
-            </Row>
-            <Row gutter={16}>
-              <Col span={12}>
-              <Form.Item 
-                label="Servicio" 
-                name={['conceptos', index, 'servicio']}
-                rules={[{ required: true, message: 'Por favor selecciona el servicio.' }]}
-              >
-                <Select
-                  placeholder="Selecciona un servicio"
-                  showSearch
-                  optionFilterProp="label"
-                  filterOption={(input, option) =>
-                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                  }
-                  filterSort={(optionA, optionB) =>
-                    (optionA?.label ?? '').toLowerCase().localeCompare(
-                      (optionB?.label ?? '').toLowerCase()
-                    )
-                  }
-                  value={concepto.servicio || undefined}
-                  onChange={(value) => handleServicioChange(concepto.id, value)}
+          <div className="cotizacion-info-message">
+            <strong>Por favor, complete todos los campos requeridos con la información correcta.</strong>
+          </div>
+      <Row gutter={16}>
+            <Col span={12}>
+                <Form.Item
+                      label="Nombre"
+                      name="nombre"
+                      rules={[
+                      {
+                          required: true,
+                      },
+                      ]}
                 >
-                  {servicios.map((servicio, idx) => (
-                    <Select.Option 
-                      key={servicio.id} 
-                      value={servicio.id} 
-                      label={servicio.nombreServicio}
-                    >
-                      {servicio.nombreServicio}
+                      <Input value={nombre}
+                      onChange={(e) => setNombre(e.target.value)}/>
+                </Form.Item>
+            </Col>
+            <Col span={12}>
+                <Form.Item
+                      label="Apellido"
+                      name="Apellido"
+                      rules={[
+                      {
+                      required: true,
+                      },
+                      ]}
+                >
+                      <Input value={apellido} 
+                      onChange={(e) => setApellido(e.target.value)}/>
+                </Form.Item>
+            </Col>
+      </Row>
+      <Row gutter={16}>
+            <Col span={12}>
+                <Form.Item
+                      label="Nombre de Empresa"
+                      name="empresa"
+                      rules={[
+                      {
+                      required: true,
+                      },
+                      ]}
+                >
+                      <Input value={empresa} 
+                      onChange={(e) => setEmpresa(e.target.value)}/>
+                </Form.Item></Col>
+                <Col span={12}>
+                <Form.Item
+                      label="Correo"
+                      name="correo"
+                      rules={[
+                        {type:'email', message: 'El correo no es válido'},
+                      {
+                      required: true,
+                      },
+                      ]}
+                >
+                      <Input value={correos} 
+                      onChange={(e) => setCorreo(e.target.value)}/>
+                </Form.Item>
+            </Col>
+      </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item label="Fecha Solicitada" rules={[{ required: true, message: 'Por favor ingresa la fecha.' }]}>
+                <DatePicker
+                  value={fechaSolicitada}
+                  onChange={handleFechaSolicitadaChange}
+                  format="DD/MM/YYYY"
+                  style={{ width: "100%" }}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="Fecha Caducidad" rules={[{ required: true, message: 'Por favor ingresa la fecha.' }]}>
+                <DatePicker
+                  value={fechaCaducidad}
+                  format="DD/MM/YYYY"
+                  style={{ width: "100%" }}
+                  placeholder="Calculada automáticamente"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item label="Tipo de Moneda" rules={[{ required: true, message: 'Por favor selecciona el tipo de moneda.' }]}>
+                <Select
+                  value={tipoMonedaSeleccionada}
+                  onChange={(value) => setTipoMonedaSeleccionada(value)}
+                >
+                  {tiposMonedaData.map((moneda) => (
+                    <Select.Option key={moneda.id} value={moneda.id}>
+                      {moneda.codigo} - {moneda.descripcion}
                     </Select.Option>
                   ))}
                 </Select>
               </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="Tasa del IVA actual" rules={[{ required: true, message: 'Por favor selecciona el IVA.' }]}>
+                <Select
+                  value={ivaSeleccionado}
+                  onChange={(value) => setIvaSeleccionado(value)}
+                >
+                  {ivasData.map((ivas) => (
+                    <Select.Option key={ivas.id} value={ivas.id}>
+                      {ivas.porcentaje}%
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
 
-              </Col>
-              <Col span={12}>
-                <Form.Item 
-                label="Cantidad de servicios"
-                //name={['conceptos', index, 'cantidad']}
-                rules={[{ required: true, message: 'Por favor ingresa la cantidad.' }]}>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={concepto.cantidad}
-                    onChange={(e) => handleInputChange(concepto.id, "cantidad", parseInt(e.target.value))}
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item label="Precio sugerido" rules={[{ required: true, message: 'Por favor ingresa el precio.' }]}>
-                  <Input
-                    disabled={true}
-                    type="number"
-                    min="0"
-                    value={concepto.precio}
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-              <Form.Item label="Notas" 
-              name={['servicios', concepto.id, 'descripcion']}
-              rules={[{ required: true, message: 'Por favor ingresa la descripcion.' }]}>
-                <TextArea
-                  value={concepto.descripcion}
-                  onChange={(e) => handleInputChange(concepto.id, "descripcion", e.target.value)}
-                  placeholder="Notas que aparecerán al final de la cotización (Opcional)"
-                />
-            </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item label="Precio final" 
-                //name={['conceptos', index, 'precioFinal']}
-                rules={[{ required: true, message: 'Por favor ingresa el precio.' }]}>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={concepto.precioFinal}
-                    onChange={(e) => handleInputChange(concepto.id, "precioFinal", parseFloat(e.target.value))}
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Card></div>
-        ))}
-        <Button type="primary" onClick={handleAddConcepto} style={{ marginBottom: "16px" }}>
-          Añadir Concepto
-        </Button>
-
-        <Alert
-            message="Pro favor de verificar que los datos sean correctos"
-            banner
-            closable
-          />
-        <div className="cotizacion-totals-buttons">
-          <div className="cotizacion-totals">
-            <p>Subtotal: {subtotal.toFixed(2)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
-            <p>Descuento ({descuento}%): {descuentoValor.toFixed(2)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
-            <p>Subtotal con descuento: {subtotalConDescuento.toFixed(2)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
-            <p>IVA ({ivasData.find(iva => iva.id === ivaSeleccionado)?.porcentaje || 16}%): {iva.toFixed(2)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
-            <p>Total: {total.toFixed(2)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
-          </div>
-          <Alert
-            message="Pro favor de verificar que los datos sean correctos"
-            banner
-            closable
-          />
-          <Form.Item
-          name="confirmar"
-          valuePropName="checked"
-          rules={[{required:true, message: 'Por favor confirma que los datos son correctos.'}]}>
-            <Checkbox>Los datos son correctos</Checkbox>
+          <Form.Item label="Descuento (%)" rules={[{ required: true, message: 'Por favor ingresa el descuento.' }]}>
+            <Input
+              type="number"
+              min="0"
+              max="100"
+              defaultValue={0}
+              value={descuento}
+              onChange={(e) => setDescuento(parseFloat(e.target.value))}
+            />
           </Form.Item>
-          <div className="cotizacion-action-buttons">
-            <div className="margin-button"><Button type="default" danger>Cancelar</Button></div>
-            <div className="margin-button">
-              <Button type="primary" onClick={handleSubmit}>Crear</Button>
+
+          <Divider>Agregar Conceptos</Divider>
+            <Row>
+              <div style={{ padding: '10px' }}>
+              <Button size="large" onClick={() => setIsNuevoServicioModalVisible(true)}>
+                Crear un Nuevo Servicio
+              </Button>
+              </div>
+              <div style={{ padding: '10px' }}>
+              <Button size="large" onClick={showModalMetodos}>
+                Crear un Nuevo Metodo
+              </Button>
+              </div>
+            </Row>
+          
+          {conceptos.map((concepto, index) => (
+            <div key={concepto.id}>
+              <Card>
+                <h3 style={{ marginBottom: 10 }}>Concepto {concepto.id}</h3>
+                <Row justify="space-between" align="middle">
+                  <Col>
+                    <Checkbox onChange={() => handleRemoveConcepto(concepto.id)}>
+                      Eliminar
+                    </Checkbox>
+                  </Col>
+                </Row>
+
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <Form.Item
+                      label="Servicio"
+                      name={['conceptos', index, 'servicio']}
+                      rules={[{ required: true, message: 'Por favor selecciona el servicio.' }]}
+                    >
+                      <Select
+                        placeholder="Selecciona un servicio"
+                        showSearch
+                        value={concepto.servicio || undefined}
+                        onChange={(value) => handleServicioChange(concepto.id, value)}
+                        filterOption={(input, option) =>
+                          option.children.toLowerCase().includes(input.toLowerCase())
+                        }
+                      >
+                        {servicios.map(serv => (
+                          <Select.Option key={serv.id} value={serv.id}>
+                            {serv.nombreServicio}
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                  </Col>
+
+                  <Col span={12}>
+                    <Form.Item label="Método Relacionado">
+                      <Input
+                        value={concepto.metodoCodigo}
+                        disabled
+                      />
+                    </Form.Item>
+                  </Col>
+                </Row>
+
+                <Row gutter={16}>
+                  <Col span={8}>
+                    <Form.Item label="Cantidad de servicios" required>
+                      <InputNumber
+                        min={1}
+                        value={concepto.cantidad}
+                        onChange={(value) => handleInputChange(concepto.id, "cantidad", value)}
+                        style={{ width: "100%" }}
+                      />
+                    </Form.Item>
+                  </Col>
+
+                  <Col span={8}>
+                    <Form.Item label="Precio sugerido">
+                      <Input disabled value={concepto.precio} />
+                    </Form.Item>
+                  </Col>
+
+                  <Col span={8}>
+                    <Form.Item label="Precio final" required>
+                      <InputNumber
+                        min={0}
+                        value={concepto.precioFinal}
+                        onChange={(value) => handleInputChange(concepto.id, "precioFinal", value)}
+                        style={{ width: "100%" }}
+                      />
+                    </Form.Item>
+                  </Col>
+                </Row>
+
+                <Row>
+                  <Col span={24}>
+                    <Form.Item
+                      label="Notas"
+                      name={['conceptos', index, 'descripcion']}
+                      rules={[{ required: true, message: 'Por favor ingresa la descripción.' }]}
+                    >
+                      <TextArea
+                        rows={2}
+                        value={concepto.descripcion}
+                        onChange={(e) => handleInputChange(concepto.id, "descripcion", e.target.value)}
+                        placeholder="Notas que aparecerán al final de la cotización (opcional)"
+                      />
+                    </Form.Item>
+                  </Col>
+                </Row>
+              </Card>
+            </div>
+          ))}
+          <Button type="primary" onClick={handleAddConcepto} style={{ marginBottom: "16px" }}>
+            Añadir Concepto
+          </Button>
+          <Alert
+              message="Pro favor de verificar que los datos sean correctos"
+              banner
+              closable
+            />
+
+          <div className="cotizacion-totals-buttons">
+            <div className="cotizacion-totals">
+              <p>Subtotal: {subtotal.toFixed(3)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
+              <p>Descuento ({descuento}%): {descuentoValor.toFixed(3)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
+              <p>Subtotal con descuento: {subtotalConDescuento.toFixed(3)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
+              <p>IVA ({ivasData.find(iva => iva.id === ivaSeleccionado)?.porcentaje || 16}%): {iva.toFixed(3)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
+              <p>Total: {total.toFixed(3)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
+            </div>
+            <Alert
+              message="Pro favor de verificar que los datos sean correctos"
+              banner
+              closable
+            />
+            <Form.Item
+            name="confirmar"
+            valuePropName="checked"
+            rules={[{required:true, message: 'Por favor confirma que los datos son correctos.'}]}>
+              <Checkbox>Los datos son correctos</Checkbox>
+            </Form.Item>
+            <div className="cotizacion-action-buttons">
+              <div className="margin-button"><Button type="default" danger onClick={() => navigate('/preCotizacion')}> Cancelar</Button></div>
+              <div className="margin-button">
+                <Button type="primary" onClick={()=> setIsModalVisible(true)}>Crear</Button>
+              </div>
             </div>
           </div>
-        </div>
-      </Form>
-
+        </Form>
+      </Spin>
       <Modal
         title="Información"
         open={isModalVisible}
@@ -713,7 +703,7 @@ const CrearPreCotizaciones = () => {
             onOk={async () => {
               try {
                 const values = await formNuevoServicio.validateFields();
-                const dataToSend = { ...values, estado: values.estado || 5 };
+                const dataToSend = { ...values, estado: values.estado || 5, organizacion: organizationId };
       
                 if (!values.unidadCfdi || !values.claveCfdi) {
                   message.error("Por favor, complete todos los campos obligatorios.");
@@ -883,6 +873,20 @@ const CrearPreCotizaciones = () => {
                   >
                       <p style={{ textAlign: "center", fontSize: "16px" }}>{successMessage}</p>
                   </Modal>
+                  <Modal
+                    title="Confirmar creación"
+                    open={isModalVisible}
+                    onOk={async () => {
+                      setIsModalVisible(false);
+                      await handleSubmit(); // <-- llama a tu función real
+                    }}
+                    onCancel={() => setIsModalVisible(false)}
+                    okText="Sí, crear"
+                    cancelText="Cancelar"
+                  >
+                    <p>¿Estás seguro de que deseas crear esta pre-cotización?</p>
+                  </Modal>
+
     </div>
   );
 };

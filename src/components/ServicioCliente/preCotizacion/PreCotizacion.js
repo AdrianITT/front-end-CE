@@ -3,9 +3,10 @@ import { Table, Button, Space, message, Input } from "antd";
 import { Link } from "react-router-dom";
 import { FileTwoTone, PlusOutlined, SearchOutlined} from "@ant-design/icons";
 import "./PrecotizacionData.css";
-//import { getAllPrecotizacion } from "../../apis/ApisServicioCliente/PrecotizacionApi";
-import {getAllPrecotizacion} from "../../../apis/ApisServicioCliente/PrecotizacionApi";
+import { getAllPrecotizacion, getAllPrecotizacionByOrganizacion} from "../../../apis/ApisServicioCliente/PrecotizacionApi";
 import {getAllEstado} from "../../../apis/ApisServicioCliente/EstadoApi";
+import ContadoPreCotizacion from "./ContadoPreCotizacion";
+import { cifrarId } from "../secretKey/SecretKey";
 
 const PreCotizacionData = () => { 
   const [preCotizaciones, setPreCotizaciones] = useState([]);
@@ -30,18 +31,18 @@ const PreCotizacionData = () => {
         setEstados(estadosMap);
 
         // 🔹 Obtener pre-cotizaciones
-        const response = await getAllPrecotizacion();
-        const filteredPreCotizaciones = response.data.filter(
-          (item) => item.organizacion === organizationId &&
-            (item.estado !== 7 || item.estado !== 8) // 🔹 Filtrar pre-cotizaciones canceladas o rechazadas
-        );
-
+        const response = await getAllPrecotizacionByOrganizacion(organizationId);
+        //console.log("Pre-Cotizaciones:", response.data);
+        // 🔸 Filtrar si necesitas excluir los estados 7 y 8:
+        const filteredPreCotizaciones = response.data;       
+        //console.log("Filtered Pre-Cotizaciones:", filteredPreCotizaciones);
         const data = filteredPreCotizaciones.map((item) => ({
-          key: item.id,
-          id: item.id,
-          cliente: `${item.nombreCliente} ${item.apellidoCliente}`,
+          key: item.precotizacionId,
+          id: item.precotizacionId,
+          numero: item.numero,
+          cliente: item.nombreCliente,
           empresa: item.nombreEmpresa,
-          estado: estadosMap[item.estado] || "Desconocido", // 🔹 Mostrar nombre del estado
+          estado: item.estado.nombre || "Desconocido",
         }));
 
         setPreCotizaciones(data);
@@ -59,8 +60,8 @@ const PreCotizacionData = () => {
   const columns = [
     {
       title: "#",
-      dataIndex: "id",
-      key: "id",
+      dataIndex: "numero",
+      key: "numero",
       width: 80,
       sorter:(a, b) => a.id - b.id,
     },
@@ -103,6 +104,8 @@ const PreCotizacionData = () => {
       filters: [
         { text: "Validado", value: "Validado" },
         { text: "No validado", value: "No validado" },
+        { text: "Chat no validado", value: "Chat no validado" },
+        { text: "Chat validado", value: "Chat validado" },
       ], // 🔹 Filtro basado en los nombres de los estados
       onFilter: (value, record) => record.estado === value,
     },
@@ -111,8 +114,8 @@ const PreCotizacionData = () => {
       key: "acciones",
       render: (_, record) => (
         <Space>
-          <Link to={`/preCotizacionDetalles/${record.id}`}>
-            <Button type="primary" icon={<FileTwoTone />} />
+          <Link to={`/preCotizacionDetalles/${cifrarId(record.id)}`}>
+            <Button type="primary"> Detalles</Button>
           </Link>
         </Space>
       ),
@@ -123,7 +126,6 @@ const PreCotizacionData = () => {
   return (
     <div className="container">
       <h1 className="title">Pre-Cotizaciones</h1>
-
       <div className="button-container">
         <Link to="/CrearPreCotizacion">
           <Button type="primary" icon={<PlusOutlined />}>
@@ -131,6 +133,7 @@ const PreCotizacionData = () => {
           </Button>
         </Link>
       </div>
+        <ContadoPreCotizacion/>
 
       <Table 
         className="custom-table"

@@ -1,7 +1,57 @@
 // src/components/CotizacionModals.js
-import React from "react";
-import { Modal, Form, Input, Checkbox, Button, Result, Select } from "antd";
-//import { ExclamationCircleOutlined } from "@ant-design/icons";
+import React, { useState } from "react";
+import { Modal, Form, Input, Checkbox, Button, Result, Select,Typography } from "antd";
+import { ExclamationCircleOutlined } from "@ant-design/icons";
+const { Text } = Typography;
+
+export const ConfirmDuplicarModal = ({ visible, onCancel, onConfirm, cotizacionesCliente = [] }) => {
+  const [selectedOption, setSelectedOption] = useState(null);
+
+
+  const handleOk = () => {
+    onConfirm(selectedOption); // enviamos el valor al componente padre
+  };
+
+  return (
+    <Modal
+      title="¿Confirmar duplicación?"
+      open={visible}
+      onCancel={onCancel}
+      onOk={handleOk}
+      okText="Sí, duplicar"
+      cancelText="Cancelar"
+    >
+      <p>¿Estás seguro de que deseas duplicar esta cotización? Se creará una nueva con los mismos datos.</p>
+
+      <Select
+        showSearch
+        placeholder="Selecciona una cotización del cliente"
+        style={{ width: "100%", marginTop: "1rem" }}
+        onChange={setSelectedOption}
+        optionFilterProp="label"
+        filterOption={(input, option) =>
+          option.label.toLowerCase().includes(input.toLowerCase())
+        }
+        options={cotizacionesCliente.map(cot => ({
+          value: cot.id,
+          label: `#${cot.nombreCompleto} - ${cot.empresa.nombre|| "Sin código"}`
+        }))}
+      />
+    </Modal>
+  );
+};
+
+export const SuccessDuplicarModal = ({ visible }) => (
+  <Modal
+    title="¡Cotización Duplicada!"
+    open={visible}
+    closable={false}
+    footer={null}
+  >
+    <Text>La cotización fue duplicada exitosamente. Redirigiendo...</Text>
+  </Modal>
+);
+
 
 export const SendEmailModal = ({
   visible,
@@ -125,3 +175,47 @@ export const ResultModal = ({
     <Result title={<p style={{ color: resultStatus === "success" ? "green" : "red" }}>{resultMessage}</p>} />
   </Modal>
 );
+
+export const DeleteCotizacionModal=({
+  visible,
+  onCancel,
+  onConfirm,
+  loading=false,
+}) => {
+  const [confirmationText, setConfirmationText] = useState("");
+  const handleOk = () => {
+    if (confirmationText === "COTIZACION") {
+      onConfirm();
+    } else {
+      alert("Por favor, escribe 'COTIZACION' para confirmar.");
+    }
+  }
+  return (
+    <Modal
+      title="Confirmar eliminación"
+      open={visible}               // coincide con los otros modales que usan `open`
+      onOk={handleOk}
+      onCancel={() => {
+        setConfirmationText("");
+        onCancel();
+      }}
+      okText="Eliminar"
+      cancelText="Cancelar"
+      confirmLoading={loading}
+      okButtonProps={{ disabled: confirmationText !== "COTIZACION" }}
+    >
+      <p>
+        ¿Está seguro de que desea eliminar esta cotización? Esta acción no se puede
+        deshacer.
+      </p>
+      <p>
+        <strong>Para confirmar, escriba <em>"COTIZACION"</em></strong>
+      </p>
+      <Input
+        placeholder='Escribe "COTIZACION" para confirmar'
+        value={confirmationText}
+        onChange={(e) => setConfirmationText(e.target.value)}
+      />
+    </Modal>
+  );
+};

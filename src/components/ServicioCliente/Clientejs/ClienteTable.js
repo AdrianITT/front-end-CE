@@ -1,55 +1,53 @@
-import React, { useMemo } from "react";
+// src/components/ClienteTable.js
+import React from "react";
 import { Table, Button } from "antd";
 import { Link } from "react-router-dom";
 import { EditOutlined, CloseOutlined } from "@ant-design/icons";
 
-// Componente memoizado para evitar renders innecesarios
-const ClienteTable = React.memo(({ clientes, showAlertModal }) => {
-  // Memoiza los filtros para "Cliente"
-  const clienteFilters = useMemo(() => {
-    return Array.from(new Set(clientes.map(item => item.Cliente))).map(value => ({ text: value, value }));
-  }, [clientes]);
+import {cifrarId}  from "../secretKey/SecretKey";
 
-  // Memoiza los filtros para "Empresa"
-  const empresaFilters = useMemo(() => {
-    return Array.from(new Set(clientes.map(item => item.Empresa))).map(value => ({ text: value, value }));
-  }, [clientes]);
+// Recibe 'clientes' y 'showAlertModal' como props
+const ClienteTable = ({ clientes, showAlertModal }) => {
 
-  // Memoiza la definición de columnas, actualizando solo cuando los filtros o showAlertModal cambien
-  const columns = useMemo(() => [
-    { 
-      title: "#", 
-      dataIndex: "key", 
-      key: "key",
-      sorter: (a, b) => a.key - b.key,
-      sortDirections: ['ascend', 'descend'],
-    },
-    { 
-      title: "Cliente", 
-      dataIndex: "Cliente", 
-      key: "Cliente",
-      filters: clienteFilters,
-      onFilter: (value, record) => record.Cliente === value,
+  const clienteFilters=Array.from(new Set(clientes.map(item=>item.Cliente)))
+  .map(value=>({text: value, value}));
+
+  const empresaFilters=Array.from(new Set(clientes.map(item=>item.Empresa)))
+  .map(value=>({text:value, value}));
+
+  
+  const columns = [
+    { title: "#", dataIndex: "numero", key: "numero",
+      sorter:(a,b)=>a.key -b.key,
+      sortDireccions: ['ascend', 'descend'],
+     },
+    { title: "Cliente", dataIndex: "Cliente", key: "Cliente",
+      filters:clienteFilters,
+      onFilter:(value, record)=>record.Cliente===value,
       filterSearch: true,
+     },
+    {title: "Division", dataIndex: "division", key: "division",
+      sorter:(a,b)=>{ const divisionA = a.division || ""; // para evitar errores con null
+        const divisionB = b.division || "";
+        return divisionA.localeCompare(divisionB);},
+      sortDireccions: ['ascend', 'descend'],
+      render: (division) => division ? division : "Sin división asignada",
     },
-    { 
-      title: "Empresa", 
-      dataIndex: "Empresa", 
-      key: "Empresa",
-      filters: empresaFilters,
-      onFilter: (value, record) => record.Empresa === value,
-      filterSearch: true,
-    },
+    { title: "Empresa", dataIndex: "Empresa", key: "Empresa",
+      filters:empresaFilters,
+      onFilter:(value,record)=>record.Empresa===value,
+      filterSearch:true,
+     },
     { title: "Correo", dataIndex: "Correo", key: "Correo" },
     {
       title: "Acción",
       key: "action",
       render: (_, record) => (
         <div className="action-buttons">
-          <Link to={`/crear_cotizacion/${record.key}`}>
+          <Link to={`/RegistroCotizacion/${cifrarId(record.key)}`}>
             <Button className="action-button-cotizar">Cotizar</Button>
           </Link>
-          <Link to={`/EditarCliente/${record.key}`}>
+          <Link to={`/EditarCliente/${cifrarId(record.key)}`}>
             <Button className="action-button-edit">
               <EditOutlined />
             </Button>
@@ -63,8 +61,8 @@ const ClienteTable = React.memo(({ clientes, showAlertModal }) => {
         </div>
       ),
     },
-  ], [clienteFilters, empresaFilters, showAlertModal]);
-
+  ];
+  
   return (
     <Table
       columns={columns}
@@ -73,6 +71,6 @@ const ClienteTable = React.memo(({ clientes, showAlertModal }) => {
       pagination={{ pageSize: 5 }}
     />
   );
-});
+};
 
 export default ClienteTable;

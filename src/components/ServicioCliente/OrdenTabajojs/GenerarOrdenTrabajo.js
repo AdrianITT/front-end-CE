@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Form, Input, Select, Button, Row, Col,Checkbox, Modal, message, Divider, Card, Result} from "antd";
+import { Form, Input, Select, Button, Row, Col,Checkbox, Modal, message, Divider, Card, Result, Descriptions, Spin} from "antd";
 //import { CloseCircleOutlined  } from "@ant-design/icons";
 import { useParams, useNavigate } from "react-router-dom";
 import "./cssOrdenTrabajo/GenerarOrdenTrabajo.css";
-import { getAllCliente } from "../../../apis/ApisServicioCliente/ClienteApi";
-import { getAllEmpresas } from "../../../apis/ApisServicioCliente/EmpresaApi";
 import { getAllReceptor, createReceptor } from "../../../apis/ApisServicioCliente/ResectorApi";
-import { getServicioById } from "../../../apis/ApisServicioCliente/ServiciosApi";
-import { getCotizacionById } from "../../../apis/ApisServicioCliente/CotizacionApi";
-import { getCotizacionServiciosByCotizacion } from "../../../apis/ApisServicioCliente/CotizacionServicioApi";
 import { createOrdenTrabajo } from "../../../apis/ApisServicioCliente/OrdenTrabajoApi";
 import { createOrdenTrabajoServico } from "../../../apis/ApisServicioCliente/OrdenTabajoServiciosApi";
+import {getAllOrdenTrabajoById} from "../../../apis/ApisServicioCliente/OrdenTrabajoApi";
+import { getAllOrdenesTrabajoData } from "../../../apis/ApisServicioCliente/OrdenTrabajoApi";
+import { getAllcotizacionesdata } from "../../../apis/ApisServicioCliente/CotizacionApi";
+import {getUserById}from "../../../apis/ApisServicioCliente/UserApi";
+import { validarAccesoPorOrganizacion } from "../validacionAccesoPorOrganizacion";
+import { cifrarId, descifrarId } from "../secretKey/SecretKey";
 const { TextArea } = Input;
 const { Option } = Select;
 
@@ -21,16 +22,56 @@ const GenerarOrdenTrabajo = () => {
   const [cliente, setCliente] = useState({});
   const [empresas, setEmpresa] = useState({});
   const [receptor, setReceptor] = useState([]);
-  const { id } = useParams();
+  const { ids } = useParams();
+  const id = descifrarId(ids)
   const [servicios, setServicios] = useState([]);
   const [cotizacionId] = useState(id);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [newOrderId, setNewOrderId] = useState(null);
   const navigate=useNavigate();
+  const [isOrdenConfirmModalVisible, setIsOrdenConfirmModalVisible] = useState(false);
+  const [ordenFormValues, setOrdenFormValues] = useState(null);
+  const [serviciosParaEliminar, setServiciosParaEliminar] = useState([]);
+  const [dataCotizacion, setCotizacionData] = useState([]);
+  const [loadings, setLoadings] = useState(false);
   
     // Obtener el ID de la organización una sola vez
     const organizationId = useMemo(() => parseInt(localStorage.getItem("organizacion_id"), 10), []);
+    useEffect(() => {
+          const verificar = async () => {
+            console.log("id: ",id);
+            const acceso = await validarAccesoPorOrganizacion({
+              fetchFunction: getAllcotizacionesdata,
+              organizationId,
+              id,
+              campoId: "Cotización",
+              navigate,
+              mensajeError: "Acceso denegado.",
+            });
+            console.log(acceso);
+            if (!acceso) return;
+            // continuar...
+          };
+      
+          verificar();
+        }, [organizationId, id]);
   //const [selectedServicios, setSelectedServicios] = useState([]); // Servicios seleccionados por el usuario
+  // const fetchValue=async()=>{
+  //   console.log("organizationId",organizationId);
+  //   const OrdenT = await getAllOrdenesTrabajoData(organizationId);  // 👈 trae todos los clientes
+
+  //   console.log("OrdenT",OrdenT);
+    
+  //   const idsPermitidos = OrdenT.data.map((c) => String(c.orden));  // 👈 importante: convertir a string para comparación con URL
+  //   console.log("idsPermitidos",idsPermitidos);
+
+  //   if (idsPermitidos.length > 0 && !idsPermitidos.includes(id)) {
+  //     message.error("No tienes autorización para editar este cliente.");
+  //     navigate("/no-autorizado");
+  //     return;
+  //   }
+      
+  // }
 
 
   useEffect(() => {
@@ -41,152 +82,79 @@ const GenerarOrdenTrabajo = () => {
         setReceptor(response.data);
       }catch(error){console.error('Error al cargar los receptores', error);}
     };
-
-    const fetchCotizacionServicios = async () => {
+    const fetchOrdenData = async () => {
       try {
-        // Obtener los datos de la cotización
-        const cotizacionResponse = await getCotizacionById(cotizacionId);  
-        //console.log("Cotización ID:", cotizacionResponse.data.id); // Ver el ID de la cotización
-        const cotizacionServicios = cotizacionResponse.data.servicios; // Servicios de la cotización
-        //console.log("Servicios de la cotización:", cotizacionServicios); // Ver los servicios de la cotización
-    
-        // Obtener todos los registros de cotizacionServicio
-        const cotizacionServicioResponse = await getCotizacionServiciosByCotizacion(cotizacionId);
-        const cotizacionServicioRecords = cotizacionServicioResponse.data;
-        //console.log("Registros de Cotización Servicio:", cotizacionServicioRecords); 
-    
-        cotizacionServicioRecords.forEach((record, index) => {
-        });
-    
-        // Filtrar solo los registros donde cotizacion sea igual al cotizacionId (asegurando que sean números)
-        const filteredCotizacionServicios = cotizacionServicioRecords.filter(
-          (record) => Number(record.cotizacion) === Number(cotizacionId)
-        );
-    
-        //console.log("Registros filtrados de Cotización Servicio:", filteredCotizacionServicios);
-    
-        // Obtener los servicios basados en los registros filtrados
-        const servicios = await Promise.all(
-          filteredCotizacionServicios.map(async (record) => {
-            const servicioResponse = await getServicioById(record.servicio);
-            return {
-              ...servicioResponse.data,
-              cantidad: record ? record.cantidad : 0, // Si no se encuentra, asigna cantidad = 0
-              descripcion: record ? record.descripcion : "",
-            };
-          })
-        );
-    
-        // Log de los servicios con la cantidad
-        //console.log("Servicios con cantidad:", servicios);
-    
-        // Finalmente, guardar los servicios en el estado o hacer lo necesario
-        setServicios(servicios);
+        const response = await getAllOrdenTrabajoById(id); // <-- usa id directamente desde useParams
+        const data = response.data;
+        //console.log("data: ", data);
+        setCotizacionData(data);           // info general
+        setCliente(data.cliente);          // info cliente
+        setEmpresa(data.empresa);          // info empresa
+        setServicios(data.servicios);      // lista de servicios
+  
       } catch (error) {
-        console.error("Error al obtener los servicios de la cotización", error);
+        console.error("Error al obtener la información de la orden de trabajo", error);
       }
     };
-    const fetchCliente = async () => {
-      try {
-        const cotizacionResponse = await getCotizacionById(cotizacionId); 
-        const clienteId = cotizacionResponse.data.cliente; 
-        //console.log("ID del cliente de la cotización:", clienteId);
-    
-        // Obtener los datos del cliente
-        const clienteResponse = await getAllCliente(clienteId);
-        //console.log("Datos del cliente obtenido:", clienteResponse.data);
-        
-        const clienteData = Array.isArray(clienteResponse.data) 
-          ? clienteResponse.data.find(c => c.id === clienteId) 
-          : clienteResponse.data;
-    
-        //console.log("Cliente seleccionado:", clienteData);
-    
-        if (clienteData) {
-          setCliente(clienteData); 
-    
-          // Verificar si `empresa` existe en los datos del cliente
-          if (clienteData.empresa) {
-            const empresaId = clienteData.empresa;  
-            //console.log("ID de la empresa asociado al cliente:", empresaId);
-    
-            // Obtener todas las empresas
-            const empresasResponse = await getAllEmpresas();
-            //console.log("Empresas disponibles:", empresasResponse.data);
-    
-            // Buscar la empresa del cliente
-            const empresaRelacionada = empresasResponse.data.find(emp => emp.id === empresaId);
-            //console.log("Empresa relacionada con el cliente:", empresaRelacionada);
-    
-            if (empresaRelacionada) {
-              setEmpresa(empresaRelacionada);
-              form.setFieldsValue({
-                calle: empresaRelacionada.calle,
-                numero: empresaRelacionada.numero,
-                colonia: empresaRelacionada.colonia,
-                codigoPostal: empresaRelacionada.codigoPostal,
-                ciudad: empresaRelacionada.ciudad,
-                estado: empresaRelacionada.estado
-              });
-            } else {
-              console.error("No se encontró la empresa asociada al cliente.");
-            }
-          } else {
-            console.warn("El cliente no tiene una empresa asociada.");
-          }
-        } else {
-          console.error("No se encontró el cliente con el ID especificado.");
-        }
-      } catch (error) {
-        console.error("Error al cargar los datos del cliente", error);
-      }
-    };
-    
-    
 
+    fetchOrdenData();
     fetchReceptor();
-    fetchCliente();
-    fetchCotizacionServicios();
   }, [id, form,cotizacionId]);
   
 
   const onFinish = async (values) => {
     try {
-    
-      // 1. Crear la orden de trabajo  
-      // Se asume que el receptor seleccionado está en values.receptor
+      await form.validateFields();
+      setOrdenFormValues(values); // guardamos los valores validados
+      setIsOrdenConfirmModalVisible(true); // mostramos el modal
+    } catch (error) {
+      message.error("Por favor completa todos los campos requeridos.");
+    }
+  };
+
+  const handleConfirmCrearOrden = async () => {
+    setLoadings(true);
+    const idLocalUser = localStorage.getItem("user_id")
+    const userResponse = await getUserById(idLocalUser);
+    let usrNameData=userResponse.data.first_name + " " + userResponse.data.last_name;
+    try {
       const ordenData = {
-        receptor: values.receptor,
+        receptor: ordenFormValues.receptor,
         cotizacion: cotizacionId,
-        estado: 2  // valor por defecto 2
+        estado: 2,
+        nombreusuario: usrNameData,
       };
       const ordenResponse = await createOrdenTrabajo(ordenData);
-      // Suponemos que el backend retorna el registro creado con su ID (por ejemplo, ordenResponse.data.id)
       const ordenTrabajoId = ordenResponse.data.id;
-
-      // 2. Insertar los conceptos en la tabla cotizacionServicio  
-      // Por cada concepto, insertar: cantidad, descripción, ordenTrabajoId, y el id del servicio
-      for (const concepto of servicios) {
+      // Filtrar los servicios que NO se deben eliminar
+      const serviciosAFiltrar = servicios.filter(
+        servicio => !serviciosParaEliminar.includes(servicio.id)
+      );
+      
+      // Crear los servicios relacionados
+      for (const concepto of serviciosAFiltrar) {
         const dataServicio = {
           cantidad: concepto.cantidad,
-          descripcion: concepto.descripcion, // Puedes obtener este valor desde el formulario o dejarlo vacío si lo deseas
-          ordenTrabajo: ordenTrabajoId, // ID de la orden creada
-          servicio: concepto.id   // Suponemos que el id del servicio es el mismo que concepto.id
+          descripcion: concepto.descripcion,
+          ordenTrabajo: ordenTrabajoId,
+          servicio: concepto.servicio.id,
         };
+        //console.log("Servicio a crear:", dataServicio);
         await createOrdenTrabajoServico(dataServicio);
       }
-
+  
       setNewOrderId(ordenTrabajoId);
-
+      setLoadings(false);
       message.success("Orden de trabajo y servicios creados correctamente");
-      // Opcional: redirigir o limpiar el formulario
+      setIsOrdenConfirmModalVisible(false);
       setIsSuccessModalOpen(true);
-
     } catch (error) {
       console.error("Error al crear la orden de trabajo o los servicios", error);
       message.error("Error al crear la orden de trabajo o los servicios");
     }
   };
+  
+  
 
 
 
@@ -210,7 +178,7 @@ const GenerarOrdenTrabajo = () => {
 
       // Crear el receptor
       const response = await createReceptor(receptorData);
-      //console.log(response.data);
+      ////console.log(response.data);
       message.success("Receptor creado correctamente");
 
       // Actualiza la lista de receptores
@@ -249,6 +217,8 @@ const GenerarOrdenTrabajo = () => {
   };
   
 
+// Obtener datos del receptor seleccionado (usado en el modal de confirmación)
+const receptorSeleccionado = receptor.find(r => r.id === ordenFormValues?.receptor);
 
 
   return (
@@ -261,27 +231,59 @@ const GenerarOrdenTrabajo = () => {
         </p>
       </div>
 
-      <div className="orden-trabajo-card">
-        <h3>Información del cliente</h3>
-        {cliente && Object.keys(cliente).length > 0 ? (
-          <div>
-            <p><strong>Nombre:</strong> {`${cliente.nombrePila} ${cliente.apPaterno} ${cliente.apMaterno}`}</p>
-            <p><strong>Email:</strong> {cliente.correo}</p>
-            <p><strong>Teléfono:</strong> {cliente.telefono}</p>
-            <p><strong>Celular:</strong> {cliente.celular}</p>
-            <p><strong>Fax:</strong> {cliente.fax}</p>
-            <p><strong>Dirección:</strong></p>
-            <p><strong>Calle:</strong>{empresas.calle}</p>
-            <p><strong>Número:</strong>{empresas.numero}</p>
-            <p><strong>Colonia:</strong>{empresas.colonia}</p>
-            <p><strong>Ciudad:</strong>{empresas.ciudad}</p>
-            <p><strong>Estado:</strong>{empresas.estado}</p>
-            <p><strong>Código Postal:</strong>{empresas.codigoPostal}</p>
-          </div>
-        ) : (
-          <p>Cargando información del cliente...</p>
-        )}
-      </div>
+      <div style={{ padding: 20 }}>
+      <h2 style={{ fontWeight: 'bold', marginBottom: 20 }}>Información del cliente</h2>
+
+      {cliente && Object.keys(cliente).length > 0 ? (
+        <Card
+        className="informacion-cliente-card" bordered={false}
+        >
+          <Descriptions
+            column={1}
+            labelStyle={{}}
+            contentStyle={{}}
+            colon={false}
+          >
+            
+            <Descriptions.Item 
+              label={<span className="informacion-cliente-label">Nombre:</span>}
+            >
+              <span className="informacion-cliente-content">{cliente.nombreCompleto}</span>
+            </Descriptions.Item>
+
+            <Descriptions.Item 
+              label={<span className="informacion-cliente-label">Email:</span>}
+            >
+              <span className="informacion-cliente-content">{cliente.correo}</span>
+            </Descriptions.Item>
+
+            <Descriptions.Item 
+              label={<span className="informacion-cliente-label">Dirección Cliente:</span>}
+            >
+              <span className="informacion-cliente-content">
+                {`${cliente.direccion.calle}, ${cliente.direccion.numero}, ${cliente.direccion.colonia}, ${cliente.direccion.ciudad}, ${cliente.direccion.estado}, C.P. ${cliente.direccion.codigoPostal}`}
+              </span>
+            </Descriptions.Item>
+
+            <Descriptions.Item 
+              label={<span className="informacion-cliente-label">Empresa:</span>}
+            >
+              <span className="informacion-cliente-content">{empresas.nombre}</span>
+            </Descriptions.Item>
+
+            <Descriptions.Item 
+              label={<span className="informacion-cliente-label">Dirección Empresa:</span>}
+            >
+              <span className="informacion-cliente-content">
+                {`${empresas.direccion.calle}, ${empresas.direccion.numero}, ${empresas.direccion.colonia}, ${empresas.direccion.ciudad}, ${empresas.direccion.estado}, C.P. ${empresas.direccion.codigoPostal}`}
+              </span>
+            </Descriptions.Item>
+          </Descriptions>
+        </Card>
+      ) : (
+        <Spin tip="Cargando información del cliente..." />
+      )}
+    </div>
 
       <div className="orden-trabajo-warning">
         <p>Agrega un Receptor y Datos del proyecto!</p>
@@ -332,32 +334,46 @@ const GenerarOrdenTrabajo = () => {
         </Row>
 
         <Divider>Agregar Conceptos</Divider>
-        {servicios.map((concepto, index) => (
-          <div key={concepto.id}>
+        {servicios.map((servicio, index) => (
+          <div key={servicio.id}>
             <Card>
-              <h3>Concepto {concepto.id}</h3>
+              <h3>Concepto {index +1}</h3>
               <div>            
               <Row justify="end">
-                <Checkbox onChange={() => handleRemoveConcepto(concepto.id)}>
-                  Eliminar
-                </Checkbox>
+              <Checkbox 
+                checked={serviciosParaEliminar.includes(servicio.id)}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  if (checked) {
+                    // Agregar el id al estado
+                    setServiciosParaEliminar(prev => [...prev, servicio.id]);
+                  } else {
+                    // Remover el id del estado
+                    setServiciosParaEliminar(prev =>
+                      prev.filter(id => id !== servicio.id)
+                    );
+                  }
+                }}
+              >
+                Eliminar
+              </Checkbox>
               </Row>
                           </div>
               <Row gutter={16}>
                 <Col span={12}>
                   <Form.Item
-                    name={['servicios', concepto.id, 'servicio']}
+                    name={['servicios', servicio.servicio.id, 'servicio']}
                     label="Servicio"
                     rules={[{ required: true, message: "Por favor, seleccione un servicio." }]}
-                    initialValue={concepto.id}
+                    initialValue={servicio.servicio.id}
                   >
                     <Select
                       placeholder="Selecciona un servicio"
                       disabled={true}
                     >
                       {servicios.map((servicio) => (
-                        <Select.Option key={servicio.id} value={servicio.id}>
-                          {servicio.nombreServicio}
+                        <Select.Option key={servicio.servicio.id} value={servicio.servicio.id}>
+                          {servicio.servicio.nombre}
                         </Select.Option>
                       ))}
                     </Select>
@@ -365,13 +381,13 @@ const GenerarOrdenTrabajo = () => {
                 </Col>
                 <Col span={12}>
                   <Form.Item
-                    name={['servicios', concepto.id, 'cantidad']}
+                    name={['servicios', servicio.id, 'cantidad']}
                     label="Cantidad"
                     rules={[{ required: true, message: "Por favor ingresa la cantidad." }]}
-                    initialValue={concepto.cantidad}
+                    initialValue={servicio.cantidad}
                   >
                     <Input
-                      type="number"
+                      
                       min="1"
                       onChange={(e) => handleInputChange(index, "cantidad", parseFloat(e.target.value))}
                     />
@@ -381,16 +397,17 @@ const GenerarOrdenTrabajo = () => {
               <Row gutter={16}>
                 <Col span={24}>
                 <Form.Item
-                  name={['servicios', concepto.id, 'descripcion']}
+                  name={['servicios', servicio.id, 'descripcion']}
                   label="Descripción"
                   rules={[{ required: true, message: "Por favor ingresa la descripción." }]}
-                  initialValue={concepto.descripcion} 
+                  initialValue={servicio.descripcion} 
+
                 >
                   <TextArea
                     placeholder="Escribe aquí la descripción del servicio"
                     autoSize={{ minRows: 2, maxRows: 6 }}
                     rows={2}
-                    value={concepto.descripcion} // Muestra la descripción actual
+                    value={servicio.descripcion} // Muestra la descripción actual
                     onChange={(e) =>
                       handleInputChange(index, "descripcion", e.target.value)
                     }
@@ -406,7 +423,7 @@ const GenerarOrdenTrabajo = () => {
           <Button type="primary" htmlType="submit" className="register-button">
             Registrar
           </Button>
-          <Button type="default" className="cancel-button" onClick={() => navigate(`/detalles_cotizaciones/${cotizacionId}`)}>
+          <Button type="default" className="cancel-button" onClick={() => navigate(`/detalles_cotizaciones/${cifrarId(cotizacionId)}`)}>
             Cancelar
           </Button>
         </div>
@@ -455,14 +472,12 @@ const GenerarOrdenTrabajo = () => {
             <Form.Item
               name="correo"
               label="Correo Electrónico"
-              rules={[{ required: true, type: 'email', message: 'Por favor ingrese un correo válido' }]}
             >
               <Input placeholder="Correo electrónico" />
             </Form.Item>
           <Form.Item
             label="Celular:"
             name="celular"
-            rules={[{ required: true, message: "Por favor ingrese el número de celular" }]}
           >
             <Input placeholder="Celular" />
           </Form.Item>
@@ -474,12 +489,12 @@ const GenerarOrdenTrabajo = () => {
         title="Orden Creada"
         open={isSuccessModalOpen}
         onOk={() => setIsSuccessModalOpen(false)}
-        onCancel={() => {setIsSuccessModalOpen(false); navigate(`/DetalleOrdenTrabajo/${newOrderId}`);}}
+        onCancel={() => {setIsSuccessModalOpen(false); navigate(`/DetalleOrdenTrabajo/${cifrarId(newOrderId)}`);}}
         footer={[
           <Button
             key="ok"
             type="primary"
-            onClick={() => {setIsSuccessModalOpen(false); navigate(`/DetalleOrdenTrabajo/${newOrderId}`);}}
+            onClick={() => {setIsSuccessModalOpen(false); navigate(`/DetalleOrdenTrabajo/${cifrarId(newOrderId)}`);}}
           >
             Cerrar
           </Button>,
@@ -489,6 +504,20 @@ const GenerarOrdenTrabajo = () => {
         status="success"
         title="¡La orden de trabajo se creó exitosamente!"></Result>
       </Modal>
+      <Modal
+        title="¿Crear orden de trabajo?"
+        open={isOrdenConfirmModalVisible}
+        onOk={handleConfirmCrearOrden}
+        onCancel={() => setIsOrdenConfirmModalVisible(false)}
+        okText="Crear"
+        cancelText="Cancelar"
+      >
+        <p>¿Estás seguro de crear esta orden de trabajo?</p>
+        <p><strong>Receptor:</strong> {receptorSeleccionado ? `${receptorSeleccionado.nombrePila} ${receptorSeleccionado.apPaterno} ${receptorSeleccionado.apMaterno}` : "N/A"}</p>
+        <p><strong>Cotización asociada:</strong> #{dataCotizacion.numero}</p>
+        <p>Se crearán también los servicios asociados automáticamente.</p>
+      </Modal>
+
     </div>
     </div>
   );

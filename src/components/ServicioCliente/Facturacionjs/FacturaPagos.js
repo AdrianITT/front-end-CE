@@ -9,7 +9,7 @@ import {
 } from '@ant-design/icons';
 import { getAllFacturaPagos } from '../../../apis/ApisServicioCliente/FacturaPagosApi';
 import { getAllFacturaPagosFacturama } from '../../../apis/ApisServicioCliente/PagosFacturamaApi';
-import { DeleteComprobantePagoFacturama } from '../../../apis/ApisServicioCliente/PagosApi';
+import { deleteComprobantepago, DeleteComprobantePagoFacturama } from '../../../apis/ApisServicioCliente/PagosApi';
 import { Api_Host } from "../../../apis/api";
 
 const PaymentCards = ({ idFactura, correoCliente,refreshPagos }) => {
@@ -34,6 +34,7 @@ const PaymentCards = ({ idFactura, correoCliente,refreshPagos }) => {
           ...p,
           isPDFVisible: p.facturama_id !== null,
         }));
+        //console.log("Pagos obtenidos:", pagosConFlag);
         setPagos(pagosConFlag);
       }else {
         setPagos([]);
@@ -52,7 +53,9 @@ const PaymentCards = ({ idFactura, correoCliente,refreshPagos }) => {
   // Función para realizar el pago
   const handleRealizarPago = async (pagoId) => {
     try {
-      await getAllFacturaPagosFacturama(pagoId);
+      console.log("Realizando pago para el ID:", pagoId);
+      const reponse =await getAllFacturaPagosFacturama(pagoId);
+      console.log("Respuesta del servidor:", reponse);
     } catch (error) {
       console.log("Se recibió un error del servidor (500), pero se ignora:", error);
     } finally {
@@ -61,7 +64,7 @@ const PaymentCards = ({ idFactura, correoCliente,refreshPagos }) => {
           pago.id === pagoId ? { ...pago, isPDFVisible: true } : pago
         )
       );
-      await fetchPagos();
+      //await fetchPagos();
     }
   };
 
@@ -95,6 +98,34 @@ const PaymentCards = ({ idFactura, correoCliente,refreshPagos }) => {
     }
   };
 
+  const descargarXML = async (pago) => {
+    try {
+      const pdfUrl = `${Api_Host.defaults.baseURL}/comprobante-xml/${pago.id}/`;
+      //console.log("📌 URL generada:", pdfUrl);
+
+      const response = await fetch(pdfUrl, {
+        method: "GET",
+        headers: { "Content-Type": "application/xml" },
+      });
+
+      if (!response.ok) {
+        throw new Error("No se pudo descargar el XML.");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Comprobante_${pago.id}.xml`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error al descargar el XML:", error);
+    }
+  };
   // Abre el modal de eliminación y guarda el ID del pago
   const openDeleteModal = (pagoId) => {
     setPagoToDelete(pagoId);
@@ -104,7 +135,10 @@ const PaymentCards = ({ idFactura, correoCliente,refreshPagos }) => {
   // Confirma eliminación del complemento
   const handleConfirmDeleteComplemento = async () => {
     try {
+      //console.log("Complemento de pago eliminado exitosamente", pagoToDelete);
       await DeleteComprobantePagoFacturama(pagoToDelete);
+      //await deleteComprobantepago(pagoToDelete);
+      
       message.success("Complemento de pago eliminado exitosamente");
       setIsDeleteModalVisible(false);
       setPagoToDelete(null);
@@ -201,6 +235,9 @@ const PaymentCards = ({ idFactura, correoCliente,refreshPagos }) => {
           <Menu.Item key="3" icon={<MailTwoTone />} onClick={() => openEmailModal(pago)}>
             Enviar por correo
           </Menu.Item>
+          <Menu.Item key="4" icon={<FilePdfTwoTone />} onClick={() => descargarXML(pago)}>
+            Descargar XML
+          </Menu.Item>
         </Menu>
       );
       return (
@@ -212,6 +249,7 @@ const PaymentCards = ({ idFactura, correoCliente,refreshPagos }) => {
       );
     } else {
       return (
+        <>
         <Button
           type="primary"
           style={{
@@ -224,6 +262,9 @@ const PaymentCards = ({ idFactura, correoCliente,refreshPagos }) => {
         >
           Realizar Pago
         </Button>
+        <Button icon={<DeleteOutlined style={{ color: 'red' }} />} 
+        onClick={() => openDeleteModal(pago.id)}>Eliminar Complemento</Button>
+        </>
       );
     }
   };

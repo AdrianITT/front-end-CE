@@ -1,8 +1,9 @@
 import React, { useState, useEffect} from "react";
 import { Table, Button} from "antd";
 import { Link } from "react-router-dom";
-import { getAllComprobantepago } from "../../../apis/ApisServicioCliente/PagosApi";
+import { getAllComprobantepago, getComprobantepagoById } from "../../../apis/ApisServicioCliente/PagosApi";
 import { getAllComprobantepagoFactura } from "../../../apis/ApisServicioCliente/ComprobantePagoFacturaApi";
+import { cifrarId } from "../secretKey/SecretKey";
 
 // Diccionario de textos (plantillas) para facilitar cambios y traducciones
 const diccionario = {
@@ -14,7 +15,7 @@ const diccionario = {
     montoTotal: "Monto Total",
     montoRestante: "Monto Restante",
     montoPago: "Monto Pago",
-    idFactura: "Folio Factura",
+    numeroFactura: "Folio Factura",
     acciones: "Acciones",
     verDetalles: "Ver Detalles",
   },
@@ -23,8 +24,9 @@ const diccionario = {
 const Pagos = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-
+  const organizationId = parseInt(localStorage.getItem("organizacion_id"), 10);
   // Función para formatear la fecha a "año/día/mes"
   const formatToYDM = (isoDateString) => {
     if (!isoDateString) return "";
@@ -40,13 +42,6 @@ const Pagos = () => {
   // Definición de columnas de la tabla usando el diccionario
   const columns = [
     {
-      title: diccionario.columnas.fechaPago,
-      dataIndex: "fechaPago",
-      key: "fechaPago",
-      sorter: (a, b) => a.rawFechaPago - b.rawFechaPago,
-      sortDirections: ["descend", "ascend"],
-    },
-    {
       title: diccionario.columnas.idComprobantePago,
       dataIndex: "comprobantepago",
       key: "comprobantepago",
@@ -60,7 +55,25 @@ const Pagos = () => {
       // 3) Activa la barra de búsqueda dentro del menú
       filterSearch: true,
     },
-    
+    {
+      title: diccionario.columnas.numeroFactura,
+      dataIndex: "numeroFactura",
+      key: "numeroFactura",
+      // 1) Generar la lista de valores únicos como { text, value }
+      filters: [...new Set(data.map(item => item.numeroFactura))].map(val => ({
+        text: val,
+        value: val,
+      })),
+      // 2) Lógica de filtrado
+      onFilter: (value, record) => record.numeroFactura === value,
+    },
+    {
+      title: diccionario.columnas.fechaPago,
+      dataIndex: "fechaPago",
+      key: "fechaPago",
+      sorter: (a, b) => a.rawFechaPago - b.rawFechaPago,
+      sortDirections: ["descend", "ascend"],
+    },
     {
       title: diccionario.columnas.montoTotal,
       dataIndex: "montototal",
@@ -71,21 +84,17 @@ const Pagos = () => {
       dataIndex: "montorestante",
       key: "montorestante",
     },
+    
     {
       title: diccionario.columnas.montoPago,
       dataIndex: "montopago",
       key: "montopago",
     },
     {
-      title: diccionario.columnas.idFactura,
-      dataIndex: "factura",
-      key: "factura",
-    },
-    {
       title: diccionario.columnas.acciones,
       key: "acciones",
       render: (text, record) => (
-        <Link to={`/detallesfactura/${record.factura}`}>
+        <Link to={`/detallesfactura/${cifrarId(record.factura)}`}>
           {diccionario.columnas.verDetalles}
         </Link>
       ),
@@ -95,52 +104,39 @@ const Pagos = () => {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      setError(null);
       try {
-        // Llamadas en paralelo a ambas APIs
-        const [respPago, respPagoFactura] = await Promise.all([
-          getAllComprobantepago(),
-          getAllComprobantepagoFactura(),
-        ]);
-
-        const comprobantesPago = respPago.data; // Array de ComprobantePago
-        const comprobantesPagoFactura = respPagoFactura.data; // Array de ComprobantePagoFactura
-
-        // Combinar la información de ambas respuestas
-        const combinedData = comprobantesPagoFactura.map((cpf) => {
-          // Buscar el comprobante de pago relacionado
-          const comprobanteRelacionado = comprobantesPago.find(
-            (cp) => cp.id === cpf.comprobantepago
-          );
-          // Obtener la fecha en timestamp para ordenamiento
-          const rawFechaPago = comprobanteRelacionado
-            ? new Date(comprobanteRelacionado.fechaPago).getTime()
-            : 0;
-          return {
-            key: cpf.id,
-            montototal: cpf.montototal,
-            montorestante: cpf.montorestante,
-            montopago: cpf.montopago,
-            factura: cpf.factura,
-            comprobantepago: cpf.comprobantepago,
-            // Fecha formateada
-            fechaPago: comprobanteRelacionado
-              ? formatToYDM(comprobanteRelacionado.fechaPago)
-              : "",
-            // Propiedad auxiliar para ordenar
-            rawFechaPago: rawFechaPago,
-          };
-        });
-
-        setData(combinedData);
+        // Solo llamamos a la API de pagos por organización
+        const pagosResponse = await getComprobantepagoById(organizationId);
+        const pagos = pagosResponse.data;
+        //console.log("Pagos:", pagos);
+  
+        const detalles = pagos.map((pago) => ({
+          key: `${pago.folioComprobantePago}-${pago.folioFactura}`,
+          comprobantepago: pago.numeroComprobantePago,
+          numeroFactura: pago.numeroFactura,
+          factura: pago.folioFactura,
+          montototal: pago.montototal,
+          montopago: pago.montopago,
+          montorestante: pago.montorestante,
+          fechaPago: formatToYDM(pago.fechaPago),
+          rawFechaPago: new Date(pago.fechaPago).getTime(),
+        }));
+  
+        setData(detalles);
       } catch (error) {
-        console.error("Error al obtener o combinar datos:", error);
+        console.error("Error al cargar comprobantes de pago:", error);
+        setError(error.message || "Error desconocido");
       } finally {
         setLoading(false);
       }
     };
-
+  
     fetchData();
   }, []);
+  
+  
+  
 
   return (
     <div

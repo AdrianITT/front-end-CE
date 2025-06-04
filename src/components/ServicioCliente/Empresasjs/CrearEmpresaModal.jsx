@@ -51,7 +51,9 @@ const CreateEmpresaModal = ({ visible, onCancel, onCreate, regimenFiscal,usosCfd
             <Form.Item
               label="RFC"
               name="rfc"
-              rules={[{ required: true, message: 'RFC requerido' }]}
+              rules={[{ required: true, message: 'RFC requerido' },
+                { min: 11, message: 'Debe tener 11 caracteres' }
+              ]}
             >
               <Input />
             </Form.Item>
@@ -85,7 +87,8 @@ const CreateEmpresaModal = ({ visible, onCancel, onCreate, regimenFiscal,usosCfd
             </Form.Item>
             <Form.Item 
             label="Uso CFDI:" 
-            name="UsoCfdi">
+            name="UsoCfdi"
+            rules={[{ required: true, message: 'Uso CFDI' }]}>
             <Select
                 showSearch
                 placeholder="Selecciona un Uso CFDI"
@@ -121,12 +124,14 @@ const CreateEmpresaModal = ({ visible, onCancel, onCreate, regimenFiscal,usosCfd
               <Input />
             </Form.Item>
             <Form.Item
-              label="Numero:"
-              name="numero"
-              rules={[{ required: true, message: 'Número requerido' }]}
+              label="Número externo/Interior:"
+              name="numeroExterior"
+              rules={[{ required: true, message: 'Número requerido' }
+              ]}
             >
               <Input />
             </Form.Item>
+
             <Form.Item
               label="Colonia:"
               name="colonia"
@@ -144,7 +149,10 @@ const CreateEmpresaModal = ({ visible, onCancel, onCreate, regimenFiscal,usosCfd
             <Form.Item
               label="Codigo Postal:"
               name="codigoPostal"
-              rules={[{ required: true, message: 'Código postal requerido' }]}
+              rules={[{ required: true, message: 'Código postal requerido' },
+                { len: 5, message: 'Debe tener 5 caracteres' },
+                { pattern: /^\d+$/, message: 'Sólo numeros' },
+              ]}
             >
               <Input />
             </Form.Item>

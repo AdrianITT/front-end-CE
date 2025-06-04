@@ -6,6 +6,8 @@ export const createCSD = (data) => Api_Host.post('/certificadosellodigital/', da
 
 export const deleteCSD = (id) => Api_Host.delete(`/certificadosellodigital/${id}/`);
 
+export const getAllCsdData = (id) => Api_Host.get(`/obtener_csd/${id}/`);
+
 export const updateCSD = async (id, data) => {
     try {
         const response = await Api_Host.put(`/certificadosellodigital/${id}/`, data);

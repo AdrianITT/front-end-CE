@@ -1,31 +1,29 @@
-import React, {useState, useEffect} from "react";
+import React, {useState, useEffect, useMemo} from "react";
+import moment from 'moment';
 import { Form, Input, Button, Select, Row, Col,DatePicker, message, Table } from "antd";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, data } from "react-router-dom";
 import "./crearfactura.css";
+import { NumericInput } from "../../NumericInput/NumericInput";
 import { getAllTipoCDFI } from "../../../apis/ApisServicioCliente/TipoCFDIApi";
 import { getAllFormaPago } from "../../../apis/ApisServicioCliente/FormaPagoApi";
 import { getAllMetodopago } from "../../../apis/ApisServicioCliente/MetodoPagoApi";
-import { getAllServicio } from "../../../apis/ApisServicioCliente/ServiciosApi";
-import { getAllOrdenesTrabajoServicio } from "../../../apis/ApisServicioCliente/OrdenTabajoServiciosApi";
-import { getAllCotizacionServicio } from "../../../apis/ApisServicioCliente/CotizacionServicioApi";
-import { getAllEmpresas } from "../../../apis/ApisServicioCliente/EmpresaApi";
-import { getAllOrganizacion } from "../../../apis/ApisServicioCliente/organizacionapi";
-import { getAllCSD } from "../../../apis/ApisServicioCliente/csdApi";
-import { getAllOrdenesTrabajo } from "../../../apis/ApisServicioCliente/OrdenTrabajoApi";
-import { getAllCotizacion } from "../../../apis/ApisServicioCliente/CotizacionApi";
-import { getAllIva } from "../../../apis/ApisServicioCliente/ivaApi";
-import { createFactura } from "../../../apis/ApisServicioCliente/FacturaApi";
+import {getDataCotizacionBy} from "../../../apis/ApisServicioCliente/CotizacionApi";
+import {createServicioFactura } from "../../../apis/ApisServicioCliente/FacturaServicio";
+//import { getAllServicio } from "../../../apis/ApisServicioCliente/ServiciosApi";
+import { createFactura,getAllDataFacturaById, getAllFacturaByOrganozacion } from "../../../apis/ApisServicioCliente/FacturaApi";
 import { getInfoSistema } from "../../../apis/ApisServicioCliente/InfoSistemaApi";
-import { getOrdenTrabajoById } from "../../../apis/ApisServicioCliente/OrdenTrabajoApi";
-import { getCotizacionById } from "../../../apis/ApisServicioCliente/CotizacionApi";
-import { getTipoMonedaById } from "../../../apis/ApisServicioCliente/Moneda";
+import { cifrarId, descifrarId } from "../secretKey/SecretKey";
+import { validarAccesoPorOrganizacion } from "../validacionAccesoPorOrganizacion";
+import { getAllcotizacionesdata } from "../../../apis/ApisServicioCliente/CotizacionApi";
+
 
 const { TextArea } = Input;
 const { Option } = Select;
 
 const CrearFactura = () => {
     const [form] = Form.useForm();
-    const { id } = useParams();
+    const { ids } = useParams();
+    const id = descifrarId(ids);
     const [tipoCambioDolar, setTipoCambioDolar] = useState(0);
     const userOrganizationId = localStorage.getItem("organizacion_id"); // 
 
@@ -33,68 +31,185 @@ const CrearFactura = () => {
     const [usoCfdiList, setUsoCfdiList] = useState([]);
     const [formaPagoList, setFormaPagoList] = useState([]);
     const [metodoPagoList, setMetodoPagoList] = useState([]);
-    const [serviciosList, setServiciosList] = useState([]);
-    const [ordenTrabajoServicios, setOrdenTrabajoServicios] = useState([]);
     const [organizacion, setOrganizacion] = useState(null);
     const [loading, setLoading] = useState(true);
     const [empresa, setEmpresa] = useState(null);
-    const [rfcEmisor, setRfcEmisor] = useState(null);
-    const [codigoOrden, setCodigoOrden] = useState(null);
-    const [ivaId, setIvaId] = useState(1);
+    const [dataID, setDataID] = useState(null);
+
+    const [tipoMoneda, setTipoMoneda] = useState({
+         id: null,
+         codigo: "",
+         descripcion: ""
+       });
+
     const navigate = useNavigate();
-    const [moneda, setMoneda] = useState({ codigo: "", descripcion: "" });
-    const [cotizacionId, setCotizacionId] = useState(null);
+
+    //const [cotizacionId, setCotizacionId] = useState(null);
     //const [cotizacion, setcotizacionData]=useState(null);
     const [formaPagoGlobal, setFormaPagoGlobal] = useState(null);
     const [loadingFormasPago, setLoadingFormasPago] = useState(false);
+    const [serviciosCot, setServiciosCot] = useState([]);
+    const [resumenCot, setResumenCot] = useState({
+      subtotal: 0, descuento: 0, iva: 0, importe: 0
+    });
+    
 
 
     // Estados
     const [tasaIva, setTasaIva] = useState(8);
-    const [subtotal, setSubtotal] = useState(0);
-    const [iva, setIva] = useState(0);
-    const [total, setTotal] = useState(0);
-    const[descuento, setDescuento]=useState(0);
+    const [selectedRowKeys, setSelectedRowKeys] = useState([]);
+    const [selectedRows, setSelectedRows] = useState([]);
+    const [descuentoGlobal, setDescuentoGlobal] = useState(0);
+    const [totalServicios, setTotalServicios] = useState(0);
+    //const factorConversion = esUSD ? tipoCambioDolar : 1;
+    // Obtener el ID de la organización una sola vez
+        const organizationId = useMemo(() => parseInt(localStorage.getItem("organizacion_id"), 10), []);
 
-    const esUSD =moneda.codigo === "USD";
-    const factorConversion = esUSD ? tipoCambioDolar : 1;
-
+        useEffect(() => {
+          const verificar = async () => {
+            console.log(id);
+            const acceso = await validarAccesoPorOrganizacion({
+              fetchFunction: getAllcotizacionesdata,
+              organizationId,
+              id,
+              campoId: "Cotización",
+              navigate,
+              mensajeError: "Acceso denegado a esta precotización.",
+            });
+            console.log(acceso);
+            if (!acceso) return;
+          };
+      
+          verificar();
+        }, [organizationId, id]);
     // Cargar datos al montar el componente
     useEffect(() => {
-        obtenerUsoCfdi();
-        obtenerFormaPago();
-        obtenerMetodoPago();
-        obtenerServicios();
-        obtenerOrdenTrabajoServicios();
-        obtenerEmpresaPorOrganizacion();
-        obtenerOrganizacion();
-        obtenerRFCEmisor();
-        obtenerCodigoOrdenTrabajo();
-        fetchTipoCambio();
-        fetchMonedaInfo(id);
-    }, [id]);
+      obtenerUsoCfdi();
+      obtenerFormaPago();
+      obtenerMetodoPago();
+      fetchTipoCambio();
+  }, [id]);
 
-    useEffect(() => {
-      if (ordenTrabajoServicios.length > 0) {
-          calcularTotales();
+  useEffect(() => {
+    const fetchDetalle = async () => {
+      try {
+        const res = await getDataCotizacionBy(id);
+        const d = res.data;
+        //console.log("1data: ", d);
+        setDataID(d);
+        // EMISOR / RECEPTOR
+        setOrganizacion(d.emisor);   // antes ponías d.empresa, ahora es d.emisor
+        setEmpresa(d.receptor);      // antes ponías d.empresa pero JSON lo llama receptor
+  
+        // MONEDA
+        setTipoMoneda(d.tipoMoneda);
+  
+        // SERVICIOS
+        setServiciosCot(d.servicios);    // JSON viene en "servicios"
+  
+        // RESUMEN
+        setResumenCot({
+          subtotal:      parseFloat(d.valores.subtotal),
+          descuento:     parseFloat(d.valores.valorDescuento),
+          iva:           parseFloat(d.valores.ivaValor),
+          importe:       parseFloat(d.valores.importe)
+        });
+  
+        // IVA porcentual
+        setTasaIva(parseFloat(d.valores.ivaPorcentaje));
+  
+        // Fecha del picket
+
+        form.setFieldsValue({ poresentajeFactura: 0 });
+  
+      } catch (err) {
+        console.error(err);
+        message.error("No se pudo obtener la cotización.");
+      } finally {
+        setLoading(false);
       }
-  }, [ordenTrabajoServicios, tasaIva]);
+    };
+    fetchDetalle();
+  }, [id]);
+  
 
-  const fetchMonedaInfo = async (ordenTrabajoId) => {
-        try {
-          const ordenTrabajo = await getOrdenTrabajoById(ordenTrabajoId);
-          //console.log("Orden de trabajo:", ordenTrabajo.data);
-          const cotizacion = await getCotizacionById(ordenTrabajo.data.cotizacion);
-          //console.log("Cotización:", cotizacion.data);
-          setDescuento(cotizacion.data.descuento);
-          const tipoMoneda = await getTipoMonedaById(cotizacion.data.tipoMoneda);
-          //console.log("Tipo de moneda:", tipoMoneda.data);
-          setMoneda({ codigo: tipoMoneda.data.codigo, descripcion: tipoMoneda.data.descripcion });
+  useEffect(() => {
+    const calcularTotalesExcluyendoSeleccionados = async () => {
+      if (!dataID || !dataID.valores) return;
       
-        } catch (error) {
-          console.error("Error al obtener la información de la moneda:", error);
-        }
-      };
+      const serviciosNoSeleccionados = serviciosCot.filter(
+        item => !selectedRowKeys.includes(item.id)
+      );
+  
+      const subtotal = serviciosNoSeleccionados.reduce(
+        (acc, item) => acc + (Number(item.cantidad) * Number(item.precio)),
+        0
+      );
+      console.log("subtotal: ", dataID);
+  
+      const valorDescuento = subtotal * (dataID.valores.descuentoPorcentaje|| 0) / 100;
+      const subtotalConDescuento = subtotal - valorDescuento;
+      const ivaValor = subtotalConDescuento * (tasaIva || 0.16);
+      const importe = subtotalConDescuento + ivaValor;
+  
+      setResumenCot({
+        subtotal,
+        descuento: valorDescuento,
+        iva: ivaValor,
+        importe
+      });
+    };
+  
+    calcularTotalesExcluyendoSeleccionados();
+  }, [selectedRowKeys, serviciosCot, tasaIva]);
+  
+  
+  
+  
+  const onSelectChange = (newSelectedRowKeys,newSelectedRows) => {
+    //console.log('selectedRowKeys changed: ', newSelectedRowKeys);
+    setSelectedRowKeys(newSelectedRowKeys);
+    setSelectedRows(newSelectedRows);
+    
+  };
+  const rowSelection = {
+    selectedRowKeys,
+    onChange: onSelectChange,
+    selections: [
+      Table.SELECTION_ALL,
+      Table.SELECTION_INVERT,
+      Table.SELECTION_NONE,
+      {
+        key: 'odd',
+        text: 'Select Odd Row',
+        onSelect: changeableRowKeys => {
+          let newSelectedRowKeys = [];
+          newSelectedRowKeys = changeableRowKeys.filter((_, index) => {
+            if (index % 2 !== 0) {
+              return false;
+            }
+            return true;
+          });
+          setSelectedRowKeys(newSelectedRowKeys);
+        },
+      },
+      {
+        key: 'even',
+        text: 'Select Even Row',
+        onSelect: changeableRowKeys => {
+          let newSelectedRowKeys = [];
+          newSelectedRowKeys = changeableRowKeys.filter((_, index) => {
+            if (index % 2 !== 0) {
+              return true;
+            }
+            return false;
+          });
+          setSelectedRowKeys(newSelectedRowKeys);
+        },
+      },
+    ],
+  };
+
   
   const fetchTipoCambio = async () => {
         try {
@@ -105,76 +220,7 @@ const CrearFactura = () => {
           console.error("Error al obtener el tipo de cambio del dólar", error);
         }
       };
-
-
-      const obtenerCodigoOrdenTrabajo = async () => {
-        try {
-          const response = await getAllOrdenesTrabajo();
-          // Buscar la orden con el ID recibido en la URL
-          const ordenEncontrada = response.data.find((orden) => orden.id === parseInt(id));
       
-          if (ordenEncontrada) {
-            setCodigoOrden(ordenEncontrada.codigo);
-            fetchMonedaInfo(ordenEncontrada.id);
-            if (ordenEncontrada.cotizacion) {
-              setCotizacionId(ordenEncontrada.cotizacion);
-              obtenerCotizacion(ordenEncontrada.cotizacion); // Para obtener IVA, etc.
-              // Llamar a la función que obtiene los servicios usando cotizacionId
-              obtenerOrdenTrabajoServicios(ordenEncontrada.cotizacion);
-            }
-          } else {
-            console.error("Orden de trabajo no encontrada");
-          }
-        } catch (error) {
-          console.error("Error al obtener la orden de trabajo:", error);
-        } finally {
-          setLoading(false);
-        }
-      };
-      
-
-  // Función para calcular Subtotal, IVA y Total
-  const calcularTotales = () => {
-    const nuevoSubtotal = ordenTrabajoServicios.reduce(
-      (acc, servicio) => acc + servicio.cantidad * servicio.precio,
-      0
-    );
-
-    const descuentoSubtotal = nuevoSubtotal * (descuento / 100);
-    const nuevoSubtotalConDescuento = nuevoSubtotal - descuentoSubtotal;
-    const nuevoIva = nuevoSubtotalConDescuento * tasaIva;
-    const nuevoTotal = nuevoSubtotalConDescuento + nuevoIva;
-
-  
-    setSubtotal(nuevoSubtotal.toFixed(2));
-    setIva(nuevoIva.toFixed(2));
-    setTotal(nuevoTotal.toFixed(2));
-
-  
-    // Actualizar valores en el formulario
-    form.setFieldsValue({
-      subtotal: `$${(nuevoSubtotal / factorConversion).toFixed(2)} ${esUSD ? "USD" : "MXN"}`,
-      iva: `$${(nuevoIva / factorConversion).toFixed(2)} ${esUSD ? "USD" : "MXN"}`,
-      total: `$${(nuevoTotal / factorConversion).toFixed(2)} ${esUSD ? "USD" : "MXN"}`,
-
-    });
-  };
-  
-
-    // Función para obtener la organización (Emisor)
-    const obtenerOrganizacion = async () => {
-      try {
-          const response = await getAllOrganizacion();
-          const organizacionFiltrada = response.data.find(org => org.id === parseInt(userOrganizationId));
-
-          if (organizacionFiltrada) {
-              setOrganizacion(organizacionFiltrada);
-          }
-      } catch (error) {
-          console.error("Error al obtener los datos de la organización", error);
-          message.error("Error al obtener los datos de la organización.");
-      }
-  };
 
     // Función para obtener Uso CFDI
     const obtenerUsoCfdi = async () => {
@@ -187,40 +233,20 @@ const CrearFactura = () => {
       }
   };
 
-  // Obtener RFC del emisor desde el certificado CSD
-  const obtenerRFCEmisor = async () => {
-    try {
-        const response = await getAllCSD();
-        const certificado = response.data.find(csd => csd.Organizacion === parseInt(userOrganizationId));
-        if (certificado) {
-            setRfcEmisor(certificado.rfc); // Guardamos el RFC del certificado
-        }
-        } catch (error) {
-            console.error("Error al obtener el RFC del certificado", error);
-            message.error("Error al obtener el RFC del emisor.");
-        }
-    };
 
    // Función para obtener la empresa de la organización
-   const obtenerEmpresaPorOrganizacion = async () => {
-    try {
-        const response = await getAllEmpresas();
-        const empresaFiltrada = response.data.find(emp => emp.organizacion === parseInt(userOrganizationId));
-
-        if (empresaFiltrada) {
-            setEmpresa(empresaFiltrada);
-        }
-        } catch (error) {
-            console.error("Error al obtener los datos de la empresa", error);
-            message.error("Error al obtener los datos de la empresa.");
-        }
-    };
 
   // Función para obtener Forma de Pago
   const obtenerFormaPago = async () => {
       try {
           const response = await getAllFormaPago();
-          setFormaPagoList(response.data);
+          const sortedList = response.data.sort((a, b) => {
+            if (a.codigo === "99") return -1; // a va primero
+            if (b.codigo === "99") return 1;  // b va primero
+            return 0; // no cambia el orden
+          });
+          console.log("Forma de Pago:", sortedList);
+          setFormaPagoList(sortedList);
       } catch (error) {
           console.error("Error al obtener Forma de Pago", error);
           message.error("Error al obtener Forma de Pago.");
@@ -238,170 +264,168 @@ const CrearFactura = () => {
       }
   };
 
-  // Función para obtener los Servicios de la Orden de Trabajo
-  const obtenerServicios = async () => {
-      try {
-          const response = await getAllServicio();
-          setServiciosList(response.data);
-          //console.log("Servicios:", response.data);
-      } catch (error) {
-          console.error("Error al obtener los Servicios", error);
-          message.error("Error al obtener los Servicios.");
-      }
-  };
+  const columns = [
+    { title: "Método",
+      dataIndex: ["metodo", "codigo"], 
+      key: "metodo" 
+    },
+    { title: "Servicio",
+      dataIndex: ["servicio", "nombre"], 
+      key: "servicioNombre" 
+    },
+    {
+      title: "Cantidad",
+      dataIndex: "cantidad",
+      key: "cantidad",
+    },    
+    {
+      title: "Precio",
+      dataIndex: "precio",
+      key: "precio",
+      render: precio =>
+        `$${parseFloat(precio).toFixed(3)} ${tipoMoneda.codigo}`
+    },
+    {
+      title: "Subtotal",
+      dataIndex: "subtotal",
+      key: "subtotal",
+      render: sub =>
+        `$${parseFloat(sub).toFixed(3)} ${tipoMoneda.codigo}`
+    },
+    
+  ];
+  
+  
 
-  // Función para obtener los Servicios de la Orden de Trabajo
-  const obtenerOrdenTrabajoServicios = async (cotizacionId) => {
+
+  const handlecrearFactura = async (values) => {
+    const porcentajeFactura = values.poresentajeFactura ?? 0;    // e.g. 50
+    const tasaIVA = tasaIva;                                    // e.g. 0.16
+  
+    // 1) Servicios que ELIMINAMOS (los seleccionados) y por tanto facturamos los NO seleccionados
+    const serviciosAFacturar = serviciosCot.filter(
+      s => !selectedRowKeys.includes(s.id)
+    );
+  
+    // 2) Subtotal de esos servicios
+    const subtotal = serviciosAFacturar.reduce((sum, s) =>
+      sum + parseFloat(s.precio) * s.cantidad, 0
+    );
+  
+    // 3) Porcentaje de descuento original de la cotización
+    const descuentoCotPct = parseFloat(dataID.valores.descuentoPorcentaje) / 100;
+    
+    // 4) Aplicar descuento original
+    const subtotalConDescOriginal = ((subtotal).toFixed(2) * (1 - descuentoCotPct)).toFixed(2);
+  
+    // 5) Aplicar % de la factura
+    const subtotalConPctFactura = (subtotalConDescOriginal * (1 - (porcentajeFactura / 100))).toFixed(2);
+  
+    // 6) Aplicar IVA
+    const totalConIva = subtotalConPctFactura * (1 + tasaIVA);
+  
+    // 7) Armar payload
+    const datosFactura = {
+      notas:           values.notas || "",
+      ordenCompra:     values.ordenCompra || "",
+      fechaExpedicion: values.fechaExpedicion.format("YYYY-MM-DDTHH:mm:ss[Z]"),
+      ordenTrabajo:    parseInt(id, 10),
+      tipoCfdi:        values.tipoCfdi,
+      formaPago:       values.formaPago,
+      metodoPago:      values.metodoPago,
+      porcentaje:      porcentajeFactura,
+      importe:         totalConIva.toFixed(2),
+      tipoMoneda:      tipoMoneda.codigo,
+      cotizacion:      id,
+    };
+  
+    // 8) Crear factura
+    const response = await createFactura(datosFactura);
+    const facturaId = response.data.id;
+  
     try {
-      // Obtener los servicios asociados a la orden de trabajo (tabla core_ordenestrabajosservicios)
-      const responseOrdenTrabajo = await getAllOrdenesTrabajoServicio();
-      const ordenServicios = responseOrdenTrabajo.data.filter(
-        (serv) => serv.ordenTrabajo === parseInt(id)
+      // 9) Guardar solo los servicios NO seleccionados
+      await Promise.all(
+        serviciosAFacturar.map(s =>
+          createServicioFactura({
+            descripcion: s.descripcion,
+            precio:      parseFloat(s.precio),
+            cantidad:    s.cantidad,
+            factura:     facturaId,
+            servicio:    s.servicio.id
+          })
+        )
       );
-      
-      // Obtener los servicios de la cotización (tabla core_cotizacionservicio)
-      const responseCotizacionServicio = await getAllCotizacionServicio();
-      const cotizacionServiciosFiltrados = responseCotizacionServicio.data.filter(
-        (cotiServ) => cotiServ.cotizacion === cotizacionId
-      );
-      //console.log('cotizacionServiciosFiltrados: ',cotizacionServiciosFiltrados);
-      // 🟢 Asegurar que `serviciosList` tenga datos antes de usarlo
-      let listaServicios = serviciosList;
-      if (listaServicios.length === 0) {
-          const responseServicios = await getAllServicio();
-          listaServicios = responseServicios.data;
-          setServiciosList(responseServicios.data); // Guardar en el estado
-      }
-
-      // 🟢 Combinar información: Agregar `nombreServicio` correctamente
-      const serviciosRelacionados = ordenServicios.map((servicio) => {
-          const cotizacionServicio = cotizacionServiciosFiltrados.find(
-              (cotiServ) => cotiServ.servicio === servicio.servicio
-          );
-
-          const servicioInfo = listaServicios.find((s) => s.id === servicio.servicio);
-
-          return {
-              ...servicio,
-              precio: cotizacionServicio ? cotizacionServicio.precio : servicio.precio,
-              nombreServicio: servicioInfo ? servicioInfo.nombreServicio : "Sin nombre",
-          };
-      });
-      
-      setOrdenTrabajoServicios(serviciosRelacionados);
+      message.success("Factura creada con éxito");
+      navigate(`/detallesfactura/${cifrarId(facturaId)}`);
     } catch (error) {
-      console.error("Error al obtener los servicios de la orden de trabajo", error);
-      message.error("Error al obtener los servicios.");
+      console.error("Error al crear la factura:", error);
+      message.error("Ocurrió un error al crear la factura.");
     }
   };
   
 
-// **Obtener el ID del IVA desde la cotización**
-const obtenerCotizacion = async (cotizacionId) => {
-  try {
-    
-      const response = await getAllCotizacion();
-      const cotizacion = response.data.find(coti => coti.id === cotizacionId);
-      if (cotizacion) {
-          setIvaId(cotizacion.iva);  // Guardar el ID de IVA
-          obtenerIva(cotizacion.iva); // Obtener el porcentaje de IVA
-
-      }
-  } catch (error) {
-      console.error("Error al obtener la cotización:", error);
-  }
-};
-
-// **Obtener el porcentaje de IVA desde la API**
-const obtenerIva = async (ivaIdParam = 1) => {
-  try {
-      const response = await getAllIva();
-      const ivaData = response.data.find(iva => iva.id === ivaIdParam);
-      if (ivaData) {
-          setTasaIva(parseFloat(ivaData.porcentaje));  // Convertir a decimal (Ej. 0.08 o 0.16)
-      }
-  } catch (error) {
-      console.error("Error al obtener IVA:", error);
-  }
-};
-
-    // Columnas de la tabla
-    const columns = [
-      { title: "Código", dataIndex: "id", key: "id" },
-      { title: "Nombre del Servicio", dataIndex: "nombreServicio", key: "nombreServicio" },
-      { title: "Cantidad", dataIndex: "cantidad", key: "cantidad" },
-      { title: "Precio", dataIndex: "precio", key: "precio", render: (precioMXN) => {
-        // Si es USD, dividir entre factorConversion
-        const precioConvertido = (precioMXN / factorConversion).toFixed(2);
-        return `$${precioConvertido} ${esUSD ? "USD" : "MXN"}`;
-      },},
-      { title: "Importe", key: "importe", render: (_, record) => {
-        // Calcula el importe en MXN primero
-        const importeMXN = record.cantidad * record.precio;
-        // Lo convierte si la moneda es USD
-        const importeConvertido = (importeMXN / factorConversion).toFixed(2);
-        return `$${importeConvertido} ${esUSD ? "USD" : "MXN"}`;
-      },},
-  ];
-
-  const handlecrearFactura=async(values)=>{
-    const importeEnMoneda = parseFloat(total) / factorConversion;
-    const datosFactura={
-      notas:values.notas|| "",
-      ordenCompra: values.ordenCompra||"",
-      fechaExpedicion: values.fechaExpedicion.format("YYYY-MM-DDTHH:mm:ss[Z]"),  // Formato correcto de fecha
-        ordenTrabajo: parseInt(id),  // ID de la orden de trabajo
-        tipoCfdi: values.tipoCfdi,  // ID del CFDI seleccionado
-        formaPago: values.formaPago,  // ID de la forma de pago seleccionada
-        metodoPago: values.metodoPago, // ID del método de pago seleccionado
-        importe: importeEnMoneda,
-        tipoMoneda: moneda.codigo
-    }
-    try {
-      message.success("Factura creada con éxito");
-      const response = await createFactura( datosFactura);
-      const facturaId = response.data.id; // Suponiendo que la API retorna el ID en response.data.id
-      message.success("Factura creada con éxito");
-      //console.log("Factura creada:", response.data);
-      navigate(`/detallesfactura/${facturaId}`);
-  } catch (error) {
-      console.error("Error al crear la factura:", error);
-      message.error("Error al crear la factura");
-  }
-  }
+  const toFixedSeguro = (value, decimals = 2) => {
+    const num = parseFloat(value);
+    return isNaN(num) ? "0.00" : num.toFixed(decimals);
+  };
+  
+  
 
   return (
     <div className="factura-container">
       <div className="factura-header">
-        <h1>Facturar {codigoOrden }</h1>
+        <h1>Facturar cotizacion {dataID?.numero??"" }</h1>
       </div>
 
-      <div className="factura-emisor-receptor">
-        <div className="emisor">
-          <h3>Emisor</h3>
-          {organizacion ? (
+      <Row gutter={24} className="factura-emisor-receptor">
+        <Col span={12}>
+          <div className="emisor">
+            <h3>Emisor</h3>
+            {organizacion ? (
               <>
-                  <p><strong>{organizacion.nombre}</strong></p>
-                  <p>RFC: {rfcEmisor || "Cargando..."}</p>
-                  <p>Dirección: {organizacion.estado}, {organizacion.ciudad}, {organizacion.colonia}, {organizacion.calle}, {organizacion.numero}, {organizacion.codigoPostal}</p>
+                <p><strong>{organizacion.nombre}</strong></p>
+                <p><strong>RFC:</strong> {organizacion.rfc || "Cargando..."}</p>
+                <p><strong>Dirección:</strong></p>
+                <ul style={{ marginLeft: 16 }}>
+                  <li><strong>Estado:</strong> {organizacion.direccion.estado}</li>
+                  <li><strong>Ciudad:</strong> {organizacion.direccion.ciudad}</li>
+                  <li><strong>Colonia:</strong> {organizacion.direccion.colonia}</li>
+                  <li><strong>Calle:</strong> {organizacion.direccion.calle}</li>
+                  <li><strong>Número:</strong> {organizacion.direccion.numero}</li>
+                  <li><strong>Código Postal:</strong> {organizacion.direccion.codigoPostal}</li>
+                </ul>
               </>
-          ) : (
+            ) : (
               <p>Cargando datos de la organización...</p>
-          )}
-        </div>
-        <div className="receptor">
-          <h3>Receptor</h3>
-          {empresa ? (
+            )}
+          </div>
+        </Col>
+
+        <Col span={12}>
+          <div className="receptor">
+            <h3>Receptor</h3>
+            {empresa ? (
               <>
-                  <p><strong>{empresa.nombre}</strong></p>
-                  <p>RFC: {empresa.rfc}</p>
-                  <p>Régimen Fiscal: {empresa.regimenFiscal}</p>
+                <p><strong>{empresa.nombre}</strong></p>
+                <p><strong>RFC:</strong> {empresa.rfc}</p>
+                <p><strong>Dirección:</strong></p>
+                <ul style={{ marginLeft: 16 }}>
+                  <li><strong>Estado:</strong> {empresa.direccion.estado}</li>
+                  <li><strong>Ciudad:</strong> {empresa.direccion.ciudad}</li>
+                  <li><strong>Colonia:</strong> {empresa.direccion.colonia}</li>
+                  <li><strong>Calle:</strong> {empresa.direccion.calle}</li>
+                  <li><strong>Número:</strong> {empresa.direccion.numero}</li>
+                  <li><strong>Código Postal:</strong> {empresa.direccion.codigoPostal}</li>
+                </ul>
               </>
-          ) : (
+            ) : (
               <p>Cargando datos de la empresa...</p>
-          )}
-        </div>
-      </div>
+            )}
+          </div>
+        </Col>
+      </Row>
+
 
       <Form layout="vertical" className="my-factura-form"
       form={form} // Conecta el formulario con la instancia
@@ -473,7 +497,8 @@ const obtenerIva = async (ivaIdParam = 1) => {
         </div>
 
         <Table
-              dataSource={ordenTrabajoServicios}
+              rowSelection={{rowSelection,onChange: onSelectChange}}
+              dataSource={serviciosCot}
               columns={columns}
               loading={loading}
               rowKey="id"
@@ -485,30 +510,35 @@ const obtenerIva = async (ivaIdParam = 1) => {
           <Form.Item label="Comentarios:" name="notas">
             <TextArea rows={5} placeholder="Agrega comentarios adicionales" />
           </Form.Item>
-          <Form.Item label="ordenCompra:" name="ordenCompra">
+          <Form.Item label="Orden de compra:" name="ordenCompra">
             <Input />
             </Form.Item>
+            <Form.Item label="Porcentaje a pagar:" name="poresentajeFactura">
+              <NumericInput
+                value={form.getFieldValue("poresentajeFactura")}
+                onChange={(val) => form.setFieldsValue({ poresentajeFactura: val })}
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+
         </div>
           </Col>
           <Col span={10}>
             <div className="factura-summary">
-            <Form.Item label="Subtotal:" name="subtotal">
-            <Input value={`$${(subtotal / factorConversion).toFixed(2)} ${esUSD ? "USD" : "MXN"}`}
-              disabled  />
+            <Form.Item label="Subtotal:">
+              <Input value={`$${resumenCot.subtotal.toFixed(3)} ${tipoMoneda.codigo}`} disabled />
             </Form.Item>
             <Form.Item label="Descuento:">
-              <Input value={`${descuento}%`} disabled />
+              <Input value={`$${resumenCot.descuento.toFixed(3)} ${tipoMoneda.codigo}`} disabled />
             </Form.Item>
-            <Form.Item label="tasa IVA:">
-              <Input value={`${tasaIva}%`} disabled />
+            <Form.Item label="Tasa IVA:">
+              <Input value={`${(tasaIva).toFixed(3)}%`} disabled />
             </Form.Item>
-            <Form.Item label="IVA:" name="iva">
-              <Input value={`$${(iva / factorConversion).toFixed(2)} ${esUSD ? "USD" : "MXN"}`}
-              disabled />
+            <Form.Item label="IVA:">
+              <Input value={`$${resumenCot.iva.toFixed(3)} ${tipoMoneda.codigo}`} disabled />
             </Form.Item>
-            <Form.Item label="Total:" name="total">
-              <Input value={`$${(total / factorConversion).toFixed(2)} ${esUSD ? "USD" : "MXN"}`}
-              disabled />
+            <Form.Item label="Total:">
+              <Input value={`$${resumenCot.importe.toFixed(3)} ${tipoMoneda.codigo}`} disabled />
             </Form.Item>
           </div>
           </Col>
@@ -520,7 +550,7 @@ const obtenerIva = async (ivaIdParam = 1) => {
           <Button
             type="danger"
             style={{ backgroundColor: "#f5222d", borderColor: "#f5222d" }}
-            onClick={() => navigate(`/DetalleOrdenTrabajo/${id}`)}
+            onClick={() => navigate(`/detalles_cotizaciones/${id}`)}
           >
             Cancelar
           </Button>

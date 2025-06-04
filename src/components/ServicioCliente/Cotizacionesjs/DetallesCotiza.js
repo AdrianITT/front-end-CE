@@ -1,20 +1,31 @@
 // src/pages/CotizacionDetalles.js
-import React, { useState} from "react";
+import React, { useState, useMemo, useEffect} from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Tabs, Typography, Spin, Menu, message } from "antd";
-import { MailTwoTone, EditTwoTone, CheckCircleTwoTone, FilePdfTwoTone } from "@ant-design/icons";
+import { Tabs, Typography, Spin, Menu, message, Modal } from "antd";
+import { MailTwoTone,
+  EditTwoTone, 
+  CheckCircleTwoTone, 
+  FilePdfTwoTone,
+  CopyTwoTone,
+  CloseCircleTwoTone }
+   from "@ant-design/icons";
 import { Api_Host } from "../../../apis/api";
 import { useCotizacionDetails } from "../Cotizacionesjs/CotizacionDetalles/useCotizacionDetails";
 import ServiciosTable from "../Cotizacionesjs/CotizacionDetalles/ServiciosTable";
 import CotizacionInfoCard from "../Cotizacionesjs/CotizacionDetalles/CotizacionInfoCard";
-import { SendEmailModal, EditCotizacionModal, ResultModal } from "../Cotizacionesjs/CotizacionDetalles/CotizacionModals";
-import { updateCotizacion} from "../../../apis/ApisServicioCliente/CotizacionApi";
+import { SendEmailModal, EditCotizacionModal, ResultModal,SuccessDuplicarModal,ConfirmDuplicarModal,DeleteCotizacionModal } from "../Cotizacionesjs/CotizacionDetalles/CotizacionModals";
+import { updateCotizacion, getDuplicarCotizacion, deleteCotizacion} from "../../../apis/ApisServicioCliente/CotizacionApi";
+import {getUserById}from "../../../apis/ApisServicioCliente/UserApi";
 import "./cotizar.css";
+import { descifrarId, cifrarId } from "../secretKey/SecretKey";
+import { validarAccesoPorOrganizacion } from "../validacionAccesoPorOrganizacion";
+import { getAllcotizacionesdata } from "../../../apis/ApisServicioCliente/CotizacionApi";
 
 const { Title, Text } = Typography;
 
 const CotizacionDetalles = () => {
-  const { id } = useParams();
+  const { ids } = useParams();
+  const id=descifrarId(ids);
   const navigate = useNavigate();
   
   // Estados para modales y resultados
@@ -27,38 +38,86 @@ const CotizacionDetalles = () => {
   const [, setCotizacionInfo] = useState([]);
   const [loadingtwo, setLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
-
+  const [isDuplicarModalVisible, setIsDuplicarModalVisible] = useState(false);
+  const [isDuplicarSuccessModalVisible, setIsDuplicarSuccessModalVisible] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [selectedId, setSelectedId] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [loadings, setLoadings] = useState(false);
+  const organizationId = useMemo(() => parseInt(localStorage.getItem("organizacion_id"), 10), []);
   
   
   // Obtenemos datos de la cotización mediante nuestro custom hook
-  const { cotizacionInfo, servicios, tipoMoneda, tipoCambioDolar, loading,refetch , AllCotizacion} = useCotizacionDetails(id);
+  const { cotizacionesCliente, cotizacionInfo, servicios, tipoMoneda, tipoCambioDolar, loading,refetch } = useCotizacionDetails(id);
   
   // Calcular si es USD y el factor de conversión
   const esUSD = tipoMoneda?.id === 2;
   const factorConversion = esUSD ? tipoCambioDolar : 1;
 
+  useEffect(() => {
+    const verificar = async () => {
+      console.log(id);
+      const acceso = await validarAccesoPorOrganizacion({
+        fetchFunction: getAllcotizacionesdata,
+        organizationId,
+        id,
+        campoId: "Cotización",
+        navigate,
+        mensajeError: "Acceso denegado a esta precotización.",
+      });
+      console.log(acceso);
+      if (!acceso) return;
+    };
+
+    verificar();
+  }, [organizationId, id]);
+
   const handleDownloadPDF = async () => {
     try {
-      const user_id = localStorage.getItem("user_id");
-      window.open(`${Api_Host.defaults.baseURL}/cotizacion/${id}/pdf?user_id=${user_id}`);
+      const response = await fetch(`${Api_Host.defaults.baseURL}/cotizacion/${id}/pdf`, {
+        method: "GET",
+        headers: {
+          // Si tu API requiere token o autenticación, agrégalo aquí
+          // "Authorization": `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+  
+      if (!response.ok) {
+        throw new Error("Error al obtener el PDF");
+      }
+  
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+  
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `cotizacion_${id}.pdf`); // nombre del archivo
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+  
+      window.URL.revokeObjectURL(url); // liberar memoria
+  
     } catch (error) {
       console.error("Error al descargar el PDF:", error);
     }
   };
+  
 
-  const updateEstadoCotizacion=async (nuevoEstado)=>{
-    try{
-      const cotizacionData = {
-        estado: nuevoEstado,  // Actualiza solo el estado
-      };
-      const response = await updateCotizacion(id, cotizacionData); // Enviar la actualización al backend
-      setCotizacionInfo(response.data);  // Actualiza el estado en el frontend
+  const updateEstadoCotizacion = async (nuevoEstado) => {
+    try {
+      setLoadings(true);
+      const response = await updateCotizacion(id, { estado: nuevoEstado });
+      setCotizacionInfo(response.data);
       refetch();
-    }catch(error){
+      message.success("Estado actualizado correctamente");
+      setLoadings(false);
+    } catch (error) {
       console.error("Error al actualizar el estado de la cotización", error);
       message.error("Error al actualizar el estado de la cotización");
     }
-  }
+  };
+  
 
   //ENVIAR CORREO
   const handleSendEmail = async () => {
@@ -110,6 +169,53 @@ const CotizacionDetalles = () => {
     }
   };
   
+  const handleDuplicarCotizacion = async (clienteIdSeleccionado) => {
+    setLoading(true);
+    try {
+      const idLocalUser = localStorage.getItem("user_id")
+      const userResponse = await getUserById(idLocalUser);
+      const nombreusuario=`${userResponse.data.first_name} ${userResponse.data.last_name}`;
+      console.log("Nombre de usuario:", nombreusuario); 
+      //console.log("Duplicando con opción:", clienteIdSeleccionado);
+      const idCliente=clienteIdSeleccionado; // úsala aquí si lo necesitas
+      const response = await getDuplicarCotizacion(id,idCliente,nombreusuario );
+      const duplicatedId = response.data.nueva_cotizacion_id;
+  
+      setIsDuplicarSuccessModalVisible(true);
+      setTimeout(() => {
+        setIsDuplicarSuccessModalVisible(false);
+        navigate(`/detalles_cotizaciones/${cifrarId(duplicatedId)}`);
+      }, 3000);
+    } catch (error) {
+      console.error("Error al duplicar la cotización", error);
+      message.error("Error al duplicar la cotización");
+    } finally {
+      setLoading(false);
+    }
+  };  
+  const showDeleteModal = (id) => {
+    setSelectedId(id);
+    setDeleteModalVisible(true);
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteModalVisible(false);
+    setSelectedId(null);
+    navigate("/cotizar");
+  };
+
+  const handleDeleteConfirm = async () => {
+    setDeleteLoading(true);
+    try {
+      await deleteCotizacion(selectedId);
+      message.success("Cotización eliminada");
+      handleDeleteCancel();
+    } catch (err) {
+      message.error("Error al eliminar");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   
   // Definición del menú de acciones (enviar correo, editar, actualizar estado, ver PDF)
@@ -118,14 +224,20 @@ const CotizacionDetalles = () => {
       <Menu.Item key="1" icon={<MailTwoTone />} onClick={() => setIsModalVisible(true)}>
         Enviar por correo
       </Menu.Item>
-      <Menu.Item key="3" icon={<EditTwoTone />} onClick={() => navigate(`/EditarCotizacion/${cotizacionInfo?.idCotizacion}`)}>
+      <Menu.Item key="3" icon={<EditTwoTone />} onClick={() => navigate(`/EditarCotizacion/${cifrarId(id)}`)}>
         Editar
       </Menu.Item>
-      <Menu.Item key="4" icon={<CheckCircleTwoTone />} onClick={() => {  updateEstadoCotizacion(2) }}>
+      <Menu.Item key="4" icon={<CheckCircleTwoTone />} onClick={() => { updateEstadoCotizacion(2) }}>
         Actualizar estado
       </Menu.Item>
       <Menu.Item key="5" icon={<FilePdfTwoTone />} onClick={handleDownloadPDF}>
-        Ver PDF
+        Descargar PDF
+      </Menu.Item>
+      <Menu.Item key="6" icon={<CopyTwoTone />} onClick={() => setIsDuplicarModalVisible(true)}>
+        Duplicar
+      </Menu.Item>
+      <Menu.Item key="7" icon={<CloseCircleTwoTone twoToneColor="#eb2f96"/> } onClick={() => showDeleteModal(id)}>
+        Eliminar Cotización 
       </Menu.Item>
     </Menu>
   );
@@ -136,7 +248,7 @@ const CotizacionDetalles = () => {
     <Spin spinning={loading|| emailLoading}>
       <div className="cotizacion-detalles-container">
         <div>
-          <h1>Detalles de la Cotización {id} Proyecto</h1>
+          <h1>Detalles de la Cotización {cotizacionInfo.numero} Proyecto</h1>
         </div>
         
         <Tabs defaultActiveKey="1">
@@ -151,10 +263,6 @@ const CotizacionDetalles = () => {
               servicios={servicios} 
               factorConversion={factorConversion} 
             />
-          </Tabs.TabPane>
-          <Tabs.TabPane tab="Documentos" key="2">
-            <Title level={4}>Documentos relacionados</Title>
-            <Text>No hay documentos disponibles.</Text>
           </Tabs.TabPane>
         </Tabs>
         
@@ -185,6 +293,26 @@ const CotizacionDetalles = () => {
             setExtraEmails("");
           }}
         />
+        <ConfirmDuplicarModal
+          visible={isDuplicarModalVisible}
+          cotizacionesCliente={cotizacionesCliente}
+          onCancel={() => setIsDuplicarModalVisible(false)}
+          onConfirm={async (selectedOption) => {
+            setIsDuplicarModalVisible(false);
+            await handleDuplicarCotizacion(selectedOption);
+          }}
+        />
+              
+        <DeleteCotizacionModal
+        visible={deleteModalVisible}
+        loading={deleteLoading}
+        onCancel={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        />
+
+        <SuccessDuplicarModal visible={isDuplicarSuccessModalVisible} />
+
+
       </div>
     </Spin>
   );

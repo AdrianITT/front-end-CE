@@ -2,16 +2,19 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, Select, Input, Button, Row, Col, Form, DatePicker, message, Modal, Checkbox } from 'antd';
 import { getAllFactura } from '../../../apis/ApisServicioCliente/FacturaApi';
-import { getAllFormaPago } from '../../../apis/ApisServicioCliente/FormaPagoApi';
+import { getAllFormaPago, getFormaPagoByOrganizacionId} from '../../../apis/ApisServicioCliente/FormaPagoApi';
 import { getAllEmpresas } from '../../../apis/ApisServicioCliente/EmpresaApi';
 import { getAllCliente } from '../../../apis/ApisServicioCliente/ClienteApi';
 import { getAllCotizacion, getCotizacionById} from '../../../apis/ApisServicioCliente/CotizacionApi';
 import { getAllCotizacionServicio } from '../../../apis/ApisServicioCliente/CotizacionServicioApi';
 import { getAllOrdenesTrabajo } from '../../../apis/ApisServicioCliente/OrdenTrabajoApi';
-import { createComprobantepago } from '../../../apis/ApisServicioCliente/PagosApi';
+import { createComprobantepago, dataComprobantePago, dataComprobantePagoFactura, getComprobantepagoById } from '../../../apis/ApisServicioCliente/PagosApi';
 import { createComprobantepagoFactura, getAllComprobantepagoFactura } from '../../../apis/ApisServicioCliente/ComprobantePagoFacturaApi';
 import {getAllMetodopago} from '../../../apis/ApisServicioCliente/MetodoPagoApi';
 import { getIvaById } from '../../../apis/ApisServicioCliente/ivaApi';
+import { getAllFacturaByOrganozacion } from "../../../apis/ApisServicioCliente/FacturaApi";
+import { cifrarId, descifrarId } from '../secretKey/SecretKey';
+import { validarAccesoPorOrganizacion } from '../validacionAccesoPorOrganizacion';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -19,14 +22,18 @@ const { TextArea } = Input;
 const CrearPagos = () => {
   const navigate = useNavigate();
   const [cotizacionId, setcotizacionId]=useState();
-  const { id } = useParams();
+  const { ids } = useParams();
+  const id= descifrarId(ids);
   // Estado para clientes (API)w
   const [clientesData, setClientesData] = useState([]);
   const [loadingClientes, setLoadingClientes] = useState(false);
+  const [clientesFactura, setClientesFactura] = useState({});
   
   // Estado para facturas (API)
   const [facturasData, setFacturasData] = useState([]);
   const [loadingFacturas, setLoadingFacturas] = useState(false);
+  const [facturasPorCliente, setFacturasPorCliente] = useState([]);
+
 
   // Estado para formas de pago (API)
   const [formasPagoData, setFormasPagoData] = useState([]);
@@ -49,6 +56,43 @@ const [formaPagoGlobal, setFormaPagoGlobal] = useState('');
 //const [metodoPagoGlobal, setMetodoPagoGlobal] = useState(null);
 const [comprobantesData, setComprobantesData] = useState([]);
 
+useEffect(() => {
+  if (!id) return;  // ⛔ Evita continuar si no hay ID válido
+
+  const verificar = async () => {
+    console.log(id);
+    const acceso = await validarAccesoPorOrganizacion({
+      fetchFunction: getAllFacturaByOrganozacion,
+      organizationId,
+      id,
+      campoId: "id",
+      navigate,
+      mensajeError: "Acceso denegado a esta precotización.",
+    });
+    console.log("acceso", acceso);
+    if (!acceso) return;
+  };
+
+  verificar();
+}, [organizationId, id]);
+
+
+// const fetchValue = async () => {
+//   console.log("organizationId", organizationId);
+
+//   const FacturasInicial = await getComprobantepagoById(organizationId);
+//   console.log("FacturasInicial", FacturasInicial);
+
+//   const idsPermitidos = FacturasInicial.data.map((c) => String(c.id));
+//   console.log("idsPermitidos", idsPermitidos);
+
+//   if (id && idsPermitidos.length > 0 && !idsPermitidos.includes(id)) {
+//     message.error("No tienes autorización para editar este cliente.");
+//     navigate("/no-autorizado");
+//     return;
+//   }
+// };
+
 
   // Estado local para el formulario de facturas
   const [facturas, setFacturas] = useState([
@@ -62,8 +106,10 @@ const [comprobantesData, setComprobantesData] = useState([]);
       precioRestante: '',
     },
   ]);
+  const [confirmModalVisible, setConfirmModalVisible] = useState(false);
 
-  useEffect(() => {
+
+  /*useEffect(() => {
     // Cuando el cliente cambia, limpiamos el select de factura y los campos
     setFacturas((prevFacturas) =>
       prevFacturas.map((fact) => ({
@@ -75,7 +121,7 @@ const [comprobantesData, setComprobantesData] = useState([]);
         // si tienes más campos, los dejas o reinicias según tu necesidad
       }))
     );
-  }, [selectedClient]);
+  }, [selectedClient]); */
   
 
   // Cargar clientes desde la API
@@ -83,7 +129,8 @@ const [comprobantesData, setComprobantesData] = useState([]);
     const fetchClientes = async () => {
       setLoadingClientes(true);
       try {
-        const response = await getAllCliente();
+        const response = await getFormaPagoByOrganizacionId(organizationId);
+        //console.log('response.data',response.data);
         setClientesData(response.data);
       } catch (error) {
         console.error("Error al obtener clientes:", error);
@@ -103,6 +150,7 @@ const [comprobantesData, setComprobantesData] = useState([]);
         setLoadingMetodos(false);
       }
     };
+    // fetchValue();
     fetchMetodosPago();
     fetchClientes();
   }, []);
@@ -125,129 +173,71 @@ const facturasConMontorestanteCero = useMemo(() => {
     .filter(cf => Number(cf.montorestante) === 0)
     .map(cf => cf.factura);
 }, [comprobantesData]);
-
-
-  //filtra por id de factura
+  
   useEffect(() => {
-    if (id) {
-      const fetchClienteFromFactura = async () => {
-        try {
-          const [cotizacionesRes, ordenesRes, facturasRes] = await Promise.all([
-            getAllCotizacion(),
-            getAllOrdenesTrabajo(),
-            getAllFactura(),
-          ]);
+    if (!id) return;
   
-          // Buscar la factura con ese id
-          const facturaFound = facturasRes.data.find(fact => fact.id === parseInt(id));
-          if (facturaFound) {
-            // Buscar la orden de trabajo asociada a la factura
-            const orden = ordenesRes.data.find(o => o.id === facturaFound.ordenTrabajo);
-            if (orden) {
-              // Buscar la cotización asociada a la orden de trabajo
-              const cotizacion = cotizacionesRes.data.find(c => c.id === orden.cotizacion);
-              //console.log('cotizaciones: ', cotizacion);
-              //console.log('hola');
-              if (cotizacion) {
-                // Actualizamos el cliente seleccionado
-                setSelectedClient(cotizacion.cliente);
-                // Preseleccionar la factura en el formulario (por ejemplo, en el primer item)
-                /*setFacturas(prev => {
-                  // Actualiza el primer item para que su propiedad "factura" sea el id encontrado
-                  if (prev.length > 0) {
-                    return prev.map((item, index) =>
-                      index === 0 ? { ...item, factura: facturaFound.id } : item
-                    );
-                  }
-                  return prev;
-                });*/
-              }
-            }
-          }
-        } catch (error) {
-          console.error("Error al obtener cliente a partir de factura:", error);
-        }
-      };
-      fetchClienteFromFactura();
-    }
+    const fetchDatosIniciales = async () => {
+      try {
+        // 1. Obtener los datos del comprobante
+        const res = await dataComprobantePago(id);
+        const clienteId = res.data.cliente_id;
+        setSelectedClient(clienteId); // 👈 esto dispara el otro useEffect que carga facturas
+  
+        // 2. Preseleccionar la factura en el formulario
+        //await handleSelectChange(1, parseInt(id));
+        setFacturas(prev =>
+          prev.map((item, index) =>
+            index === 0 ? { ...item, factura: parseInt(id) } : item
+          )
+        ); 
+  
+      } catch (error) {
+        console.error("Error al obtener datos del comprobante:", error);
+      }
+    };
+  
+    fetchDatosIniciales();
   }, [id]);
-  
-
   // Cargar facturas filtradas por organización y cliente
   useEffect(() => {
-    const fetchFacturasFiltradas = async () => {
+    const fetchFacturasPorCliente = async () => {
+      if (!selectedClient) return;
+  
       setLoadingFacturas(true);
       try {
-        const [empresasRes, clientesRes, cotizacionesRes, ordenesRes, facturasRes] = await Promise.all([
-          getAllEmpresas(),
-          getAllCliente(),
-          getAllCotizacion(),
-          getAllOrdenesTrabajo(),
-          getAllFactura(),
-        ]);
-
-        // Filtrar empresas por organizationId
-        const empresasFiltradas = empresasRes.data.filter(emp => emp.organizacion === organizationId);
-        const empresaIds = empresasFiltradas.map(emp => emp.id);
-
-        // Filtrar clientes cuyos "empresa" estén en empresaIds
-        const clientesFiltrados = clientesRes.data.filter(cliente => empresaIds.includes(cliente.empresa));
-        const clienteIds = clientesFiltrados.map(cliente => cliente.id);
-
-        // Filtrar cotizaciones cuyos "cliente" estén en clienteIds
-        const cotizacionesFiltradas = cotizacionesRes.data.filter(cot => clienteIds.includes(cot.cliente));
-        const cotizacionIds = cotizacionesFiltradas.map(cot => cot.id);
-        //console.log('cotizacionesFiltradas: ', cotizacionesFiltradas);
-        //console.log('cotizacionIds: ', cotizacionIds)
-        setcotizacionId(cotizacionIds);
-
-        // Filtrar órdenes de trabajo cuyos "cotizacion" estén en cotizacionIds
-        const ordenesFiltradas = ordenesRes.data.filter(orden => cotizacionIds.includes(orden.cotizacion));
-        const ordenIds = ordenesFiltradas.map(orden => orden.id);
-        
-        //console.log('factura.importe',facturasRes.data);
-        // Filtrar facturas cuyos "ordenTrabajo" estén en ordenIds
-        const facturasFiltradas = facturasRes.data.filter(factura => ordenIds.includes(factura.ordenTrabajo));
-        //console.log('Facturas filtradas (sin filtro de cliente):', facturasFiltradas);
-
-                // Después de filtrar las facturas base:
-        let facturasEnriquecidas = facturasFiltradas.map(fact => {
-          // 1) Buscar la orden de trabajo correspondiente
-          const orden = ordenesFiltradas.find(o => o.id === fact.ordenTrabajo);
-          // 2) Buscar la cotización correspondiente
-          const coti = cotizacionesFiltradas.find(c => c.id === orden.cotizacion);
-          // 3) Ese coti.cliente es el ID del cliente
-          return {
-            ...fact,
-            cliente: coti?.cliente, // <-- ahora cada factura tendrá .cliente
-            cotizacion: coti?.id,
-            ordenTrabajo: orden,
-          };
-        });
-
-        //console.log('Facturas con cliente:', facturasEnriquecidas);
-
-        // Filtramos por selectedClient
-        const facturasDelCliente = selectedClient
-          ? facturasEnriquecidas.filter(f => Number(f.cliente) === Number(selectedClient))
-          : facturasEnriquecidas;
-        //console.log('Selected Client:', selectedClient);
-        //console.log('Facturas filtradas para el cliente:', facturasDelCliente);
-
-        setFacturasData(facturasDelCliente);
+        //console.log("Cargando facturas para el cliente:", selectedClient);
+        const res = await dataComprobantePagoFactura(selectedClient);
+        //console.log("Facturas del cliente:", res);
+        const facturas = res.data.map(f => ({
+          id: f.factura_id,
+          numero: f.facturanumero,
+          importe: f.importe,
+          cotizacion: f.cotizacion.cotizacion_id,
+          cotizacionNumero: f.cotizacion.numero,
+          tipoMoneda: f.tipoMoneda.codigo,
+          cliente: f.cliente.cliente_id
+        }));
+        setSubtotal(facturas.importe);
+        setTotal(facturas.importe);
+        setFacturasPorCliente(facturas); // este lo usas en `obtenerFacturasDisponibles`
+        //console.log("Facturas filtradas:", facturas);
       } catch (error) {
-        console.error("Error al filtrar facturas:", error);
+        console.error("Error al obtener facturas por cliente:", error);
       } finally {
         setLoadingFacturas(false);
       }
     };
-
-    // Si se seleccionó un cliente, se puede filtrar facturas relacionadas a ese cliente.
-    // Puedes llamar a esta función cada vez que cambie el cliente seleccionado.
-    if (selectedClient) {
-      fetchFacturasFiltradas();
-    }
-  }, [organizationId, selectedClient]);
+  
+    fetchFacturasPorCliente();
+  }, [selectedClient]);  
+  useEffect(() => {
+    if (!id || facturasPorCliente.length === 0) return;
+  
+    // Ejecuta handleSelectChange solo cuando ya hay facturas disponibles
+    handleSelectChange(1, parseInt(id));
+  }, [id, facturasPorCliente]);
+  
 
   // Cargar formas de pago desde la API
   useEffect(() => {
@@ -280,6 +270,7 @@ const facturasConMontorestanteCero = useMemo(() => {
       },
     ]);
   };
+  
 
   // Función para obtener las facturas disponibles (para evitar duplicados)
   // Ahora se filtra además por cliente, asumiendo que cada factura en facturasData tiene la propiedad "cliente"
@@ -289,26 +280,18 @@ const facturasConMontorestanteCero = useMemo(() => {
       .filter((f) => f.id !== itemId)
       .map((f) => f.factura);
   
-    // 2) Filtrar facturasData:
-    const disponibles = facturasData.filter((fd) => {
-      // a) Asegurarse de que la factura pertenezca al cliente seleccionado
-      if (fd.cliente !== selectedClient) return false;
-  
-      // b) No mostrar facturas ya elegidas
+    // 2) Filtrar las facturas ya obtenidas desde dataComprobantePagoFactura
+    const disponibles = facturasPorCliente.filter((fd) => {
       if (facturasSeleccionadas.includes(fd.id)) return false;
-  
-      // c) Excluir facturas que ya tienen montorestante=0 (están pagadas)
       if (facturasConMontorestanteCero.includes(fd.id)) return false;
-
-
       if (!fd.importe || Number(fd.importe) <= 0) return false;
-  
-      // d) Si pasa todos los filtros, la factura se incluye
       return true;
     });
-    //console.log("Filtradas para itemId:", itemId, disponibles);
+    
+  
     return disponibles;
   };
+  
   
 
   // Manejo de cambios en los inputs
@@ -331,28 +314,29 @@ const facturasConMontorestanteCero = useMemo(() => {
     );
   };
   
-
-
-
-  // Manejo de cambio en el select de forma de pago
-  /*
-  const handleFormaPagoChange = (id, value) => {
-    setFacturas(prev =>
-      prev.map(fact => (fact.id === id ? { ...fact, formaPago: value } : fact))
-    );
+  const fetchNombreClientePorFactura = async (facturaId) => {
+    try {
+      const res = await dataComprobantePago(facturaId);
+      if (res && res.data && res.data.nombreCompleto) {
+        setClientesFactura((prev) => ({
+          ...prev,
+          [facturaId]: res.data.nombreCompleto,
+        }));
+      }
+    } catch (err) {
+      console.error(`Error al obtener cliente de la factura ${facturaId}:`, err);
+    }
   };
-
-  // Manejo de cambio de fecha
-  const handleFechaChange = (id, date) => {
-    setFacturas(prev =>
-      prev.map(fact => (fact.id === id ? { ...fact, fechaSolicitada: date } : fact))
-    );
-  };*/
+  
 
   const [form] = Form.useForm();
+  const handleCrearPagos = () => {
+    setConfirmModalVisible(true); // Mostrar modal personalizado de confirmación
+  };
+  
 
   // ✅ Función para crear el comprobante de pago
-  const handleCrearPagos = async () => {
+  const handleConfirmCrearPagos = async () => {
       // Validar que para cada factura el precio a pagar no sea mayor al precio total
   for (const facturaItem of facturas) {
     if (Number(facturaItem.precioPagar) > Number(facturaItem.precioTotal)) {
@@ -437,32 +421,18 @@ const handleModalOk = () => {
         );
   
         // 4) Calcular el subtotal
-        const nuevoSubtotal = serviciosFiltrados.reduce(
-          (acc, item) => acc + (Number(item.precio) * Number(item.cantidad)),
-          0
-        );
+        const nuevoSubtotal = facturasPorCliente.importe;
   
         // 5) Calcular descuento, IVA y total usando el porcentaje obtenido
         const montoDescuento = nuevoSubtotal * (coti.descuento / 100);
         const subtotalConDesc = nuevoSubtotal - montoDescuento;
         const montoIva = subtotalConDesc * (ivaPercentage);
-        const montoTotal = subtotalConDesc + montoIva;
+        const montoTotal = facturasPorCliente.importe;
   
         // 6) Guardar en el estado
         setSubtotal(nuevoSubtotal);
         setTotal(montoTotal);
   
-        // 7) (Opcional) Asignar el total a la primera factura del formulario
-        /*
-        setFacturas((prev) =>
-          prev.map((fact, index) =>
-            index === 0 ? { ...fact, precioTotal: montoTotal.toFixed(2) } : fact
-          )
-        );*/
-        
-  
-        //console.log("Descuento:", coti.descuento, "IVA:", ivaPercentage);
-        //console.log("Subtotal:", nuevoSubtotal, "Total:", montoTotal);
       } catch (error) {
         console.error("Error al obtener datos de la cotización:", error);
       }
@@ -472,75 +442,78 @@ const handleModalOk = () => {
   }, [cotizacionId]);
 
   // Manejo de cambio en el select de factura
-const handleSelectChange = async (facturaItemId, selectedFacturaId) => {
-  // 1) Actualiza la factura seleccionada
-  setFacturas((prev) =>
-    prev.map((fact) =>
-      fact.id === facturaItemId
-        ? { ...fact, factura: selectedFacturaId }
-        : fact
-    )
-  );
-
-  // 2) Ajusta cotizacionId si lo necesitas
-  const selectedFacturaObj = facturasData.find((fd) => fd.id === selectedFacturaId);
-  if (selectedFacturaObj) {
-    setcotizacionId(selectedFacturaObj.cotizacion);
-  }
-
-  // 3) Traer todos los ComprobantePagoFactura (o filtrar por factura en el backend)
-  try {
-    const response = await getAllComprobantepagoFactura(); 
-    // O si tu backend lo permite:
-    //console.log('response',response);
-
-    // 4) Filtrar por la factura seleccionada
-    const comprobantesFactura = response.data.filter(
-      (cf) => cf.factura === selectedFacturaId
+  const handleSelectChange = async (facturaItemId, selectedFacturaId) => {
+    // 1) Actualiza la factura seleccionada
+    fetchNombreClientePorFactura(selectedFacturaId);
+  
+    setFacturas((prev) =>
+      prev.map((fact) =>
+        fact.id === facturaItemId
+          ? { ...fact, factura: selectedFacturaId }
+          : fact
+      )
     );
-    //console.log('comprobantesFactura: ',comprobantesFactura);
-    const invoiceObj = facturasData.find((f) => f.id === selectedFacturaId);
-    if (comprobantesFactura.length > 0) {
-      // 5) Tomar la parcialidad más alta
-      const recordConParcialidadMaxima = comprobantesFactura.reduce((acc, curr) =>
-        curr.parcialidad > acc.parcialidad ? curr : acc
-      );
-
-      // 6) Usar su `montorestante` como "precioTotal"
-      const montorestante = recordConParcialidadMaxima.montorestante;
-
-      setFacturas((prev) =>
-        prev.map((fact) => {
-          if (fact.id === facturaItemId) {
-            return { ...fact, precioTotal: montorestante.toString(),
-              tipoMoneda: invoiceObj ? invoiceObj.tipoMoneda : '' 
-             };
-          }
-          return fact;
-        })
-      );
-    } else {
-      setFacturas((prev) =>
-        prev.map((fact) => {
-          if (fact.id === facturaItemId) {
-            // 1) Busca la factura en el array facturasData
-            //const invoiceObj = facturasData.find((f) => f.id === selectedFacturaId);
-            if (invoiceObj) {
-              // 2) Asigna su 'importe' como precioTotal
-              return { ...fact, precioTotal: invoiceObj.importe,tipoMoneda: invoiceObj.tipoMoneda };
-            }
-            // Si no se encuentra, lo dejas en blanco o como prefieras
-            return { ...fact, precioTotal: '', tipoMoneda: ''  };
-          }
-          return fact;
-        })
-      );
-
+  
+    // 2) Ajusta cotizacionId si lo necesitas
+    const selectedFacturaObj = facturasPorCliente.find((fd) => fd.id === selectedFacturaId);
+    if (selectedFacturaObj) {
+      setcotizacionId(selectedFacturaObj.cotizacion);
     }
-  } catch (err) {
-    console.error('Error obteniendo ComprobantePagoFactura:', err);
-  }
-};
+  
+    try {
+      const response = await getAllComprobantepagoFactura();
+  
+      const comprobantesFactura = response.data.filter(
+        (cf) => cf.factura === selectedFacturaId
+      );
+  
+      const invoiceObj = facturasPorCliente.find((f) => f.id === selectedFacturaId);
+  
+      if (comprobantesFactura.length > 0) {
+        // Si hay registros de pagos, tomamos el montorestante más reciente
+        const recordConParcialidadMaxima = comprobantesFactura.reduce((acc, curr) =>
+          curr.parcialidad > acc.parcialidad ? curr : acc
+        );
+  
+        const montorestante = recordConParcialidadMaxima.montorestante;
+  
+        setFacturas((prev) =>
+          prev.map((fact) => {
+            if (fact.id === facturaItemId) {
+              return {
+                ...fact,
+                precioTotal: montorestante.toString(),
+                tipoMoneda: invoiceObj?.tipoMoneda || '',
+                precioPagar: montorestante.toString(), // Autocompletar precio a pagar
+                precioRestante: '0.00',                // Automáticamente 0
+              };
+            }
+            return fact;
+          })
+        );
+      } else {
+        // Si no hay pagos previos, usamos el importe completo
+        setFacturas((prev) =>
+          prev.map((fact) => {
+            if (fact.id === facturaItemId) {
+              return {
+                ...fact,
+                precioTotal: invoiceObj?.importe || '',
+                tipoMoneda: invoiceObj?.tipoMoneda || '',
+                precioPagar: invoiceObj?.importe || '',      // Autocompletar precio a pagar
+                precioRestante: '0.00',
+              };
+            }
+            return fact;
+          })
+        );
+      }
+    } catch (err) {
+      console.error('Error obteniendo ComprobantePagoFactura:', err);
+    }
+  };
+
+  
 const handleRemoveConcepto = (facturaId, e) => {
   // Si el checkbox está marcado:
   if (e.target.checked) {
@@ -579,8 +552,8 @@ const handleRemoveConcepto = (facturaId, e) => {
           dropdownStyle={{ borderRadius: 8 }} // Estilo para el menú desplegable
         >
           {clientesData.map((cliente) => (
-            <Option key={cliente.id} value={cliente.id}>
-              {cliente.nombrePila} {cliente.apPaterno} {cliente.apMaterno}
+            <Option key={cliente.cliente_id} value={cliente.cliente_id}>
+              {cliente.nombreCompleto} 
             </Option>
           ))}
         </Select>
@@ -696,15 +669,23 @@ const handleRemoveConcepto = (facturaId, e) => {
                   loading={loadingFacturas}
                   dropdownStyle={{ borderRadius: 8 }}
                 >
-                  {obtenerFacturasDisponibles(factura.id).map((f) => (
+                {obtenerFacturasDisponibles(factura.id).map((f) => {
+                  const nombreCliente = clientesFactura[f.id]; // busca si ya está
+                  const label = nombreCliente
+                    ? `Factura ${f.numero} - cotizacion ${f.cotizacionNumero} - ${nombreCliente}`
+                    : `Factura ${f.numero} - cotizacion ${f.cotizacionNumero}`;
+                  
+                  return (
                     <Select.Option
                       key={f.id}
                       value={f.id}
-                      label={`Factura ${f.id} - ${f.ordenTrabajo.codigo}`}
+                      label={label}
                     >
-                      {`Factura ${f.id} - ${f.ordenTrabajo.codigo}`}
+                      {label}
                     </Select.Option>
-                  ))}
+                  );
+                })}
+
                 </Select>
               </Form.Item>
 
@@ -715,7 +696,6 @@ const handleRemoveConcepto = (facturaId, e) => {
                 <Col span={12}>
                   <Form.Item label="Precio total">
                     <Input
-                      type="number"
                       value={factura.precioTotal}
                       onChange={(e) =>
                         handleInputChange(factura.id, 'precioTotal', e.target.value)
@@ -739,7 +719,7 @@ const handleRemoveConcepto = (facturaId, e) => {
                     <Input
                       max={factura.precioTotal}
                       min={1}
-                      type="number"
+
                       value={factura.precioPagar}
                       onChange={(e) =>
                         handleInputChange(factura.id, 'precioPagar', e.target.value)
@@ -811,6 +791,17 @@ const handleRemoveConcepto = (facturaId, e) => {
         >
           Crear pagos
         </Button>
+        <Modal
+          title="Confirmar registro de pago"
+          visible={confirmModalVisible}
+          onOk={handleConfirmCrearPagos}
+          onCancel={() => setConfirmModalVisible(false)}
+          okText="Registrar pago"
+          cancelText="Cancelar"
+        >
+          <p>¿Estás seguro de que deseas registrar este pago?</p>
+        </Modal>
+
         <Modal
         title="Pago Registrado"
         visible={isModalVisible}

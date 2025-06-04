@@ -16,7 +16,7 @@ export const createServicio = async (data) => {
 
 export const updateServicio = async (id, data) => {
     try {
-        const response = await Api_Host.put(`/servicio/${id}/`, data);
+        const response = await Api_Host.patch(`/servicio/${id}/`, data);
         return response.data;
     } catch (error) {
         console.error("Error al actualizar servicio:", error.response?.data || error.message);
@@ -25,3 +25,5 @@ export const updateServicio = async (id, data) => {
 };
 
 export const getServicioById = async (id) => Api_Host.get(`/servicio/${id}/`);
+
+export const getServicioData = async (id) => Api_Host.get(`/allServiciosData/${id}/`);

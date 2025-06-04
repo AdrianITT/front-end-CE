@@ -1,20 +1,26 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect,useMemo  } from "react";
 import "./Crearcotizacion.css";
-import { Form, Input, Button, Row, Col, Select, Checkbox, Divider, message, DatePicker, Card, Modal, Result, Text, InputNumber } from "antd";
+import { Form, Input, Button, Row, Col, Select, Checkbox, Divider, message, DatePicker, Card, Modal, Result, Text,InputNumber } from "antd";
 import dayjs from "dayjs";
 import { useParams, useNavigate } from "react-router-dom";
 import { getCotizacionById, updateCotizacion } from "../../../apis/ApisServicioCliente/CotizacionApi";
 import { getAllCotizacionServicio, updateCotizacionServicio, createCotizacionServicio, deleteCotizacionServicio } from "../../../apis/ApisServicioCliente/CotizacionServicioApi";
 import { getAllTipoMoneda } from "../../../apis/ApisServicioCliente/Moneda";
 import { getAllIva } from "../../../apis/ApisServicioCliente/ivaApi";
-import { getAllServicio, getServicioById } from "../../../apis/ApisServicioCliente/ServiciosApi";
+import { getAllServicio, getServicioById,getServicioData } from "../../../apis/ApisServicioCliente/ServiciosApi";
 import { getInfoSistema } from "../../../apis/ApisServicioCliente/InfoSistemaApi";
+import {getAllMetodoData} from "../../../apis/ApisServicioCliente/MetodoApi";
+import { descifrarId, cifrarId } from "../secretKey/SecretKey";
+import { validarAccesoPorOrganizacion } from "../validacionAccesoPorOrganizacion";
+import { getAllcotizacionesdata } from "../../../apis/ApisServicioCliente/CotizacionApi";
 
 const { TextArea } = Input;
 
 const EditarCotizacion = () => {
      const navigate = useNavigate();
-     const { id } = useParams(); // Obtener el ID de la cotización desde la URL
+     const { ids } = useParams(); // Obtener el ID de la cotización desde la URL
+     const id=descifrarId(ids);
+     const [contadorId, setContadorId] = useState(1);
      const [cotizacionData, setCotizacionData] = useState(null);
      const [fechaSolicitada, setFechaSolicitada] = useState(null);
      const [fechaCaducidad, setFechaCaducidad] = useState(null);
@@ -28,6 +34,25 @@ const EditarCotizacion = () => {
      const [conceptos, setConceptos] = useState([]);
      const [isModalVisible, setIsModalVisible] = useState(false);
      const [serviciosRelacionados, setServiciosRelacionados] = useState([]);
+     const [metodosData, setMetodosData] = useState([]);
+     const organizationId = useMemo(() => parseInt(localStorage.getItem("organizacion_id"), 10), []);
+     useEffect(() => {
+      const verificar = async () => {
+        console.log(id);
+        const acceso = await validarAccesoPorOrganizacion({
+          fetchFunction: getAllcotizacionesdata ,
+          organizationId,
+          id,
+          campoId: "Cotización",
+          navigate,
+          mensajeError: "Acceso denegado a esta precotización.",
+        });
+        console.log(acceso);
+        if (!acceso) return;
+      };
+  
+      verificar();
+    }, [organizationId, id]);
    
      // Obtener tipo de cambio del dólar
      useEffect(() => {
@@ -78,17 +103,19 @@ const EditarCotizacion = () => {
                 filteredCotizacionServicios.map(async (record) => {
                   const servicioResponse = await getServicioById(record.servicio);
                   return {
-                    id: record ? record.id : null,
-                    servicio: record.servicio, 
+                    id: record.id,
+                    servicio: record.servicio,
                     nombreServicio: servicioResponse.data.nombreServicio,
-                    cantidad: record ? record.cantidad : 0,
+                    cantidad: record.cantidad,
                     precio: parseFloat(servicioResponse.data.precio) || 0,
-                    descripcion: record ? record.descripcion : "",
+                    descripcion: record.descripcion,
                     cotizacion: record.cotizacion,
-                    precioEditable: record ? record.precio : parseFloat(servicioResponse.data.precio) || 0,
+                    precioFinal: record ? record.precio : parseFloat(servicioResponse.data.precio) || 0,
+                    metodoCodigo: record.metodo || servicioResponse.data.metodos,
                   };
                 })
               );
+              
         
               //console.log("Servicios con detalles:", serviciosConDetalles);
               setConceptos(serviciosConDetalles);
@@ -125,13 +152,22 @@ const EditarCotizacion = () => {
    
        const fetchServicios = async () => {
          try {
-           const response = await getAllServicio();
+           const response = await getServicioData(organizationId);
            setServicios(response.data);
          } catch (error) {
            console.error("Error al cargar los servicios", error);
          }
        };
-   
+
+       const fetchMetodos = async () => {
+        try {
+          const response = await getAllMetodoData(organizationId);
+          setMetodosData(response.data);
+        } catch (error) {
+          console.error("Error al cargar los métodos de pago", error);
+        }
+       };
+       fetchMetodos();
        fetchTipoMoneda();
        fetchIva();
        fetchServicios();
@@ -149,10 +185,12 @@ const EditarCotizacion = () => {
    
      // Actualizar estado de los campos del formulario
      const handleInputChange = (id, field, value) => {
-       setConceptos(conceptos.map(concepto =>
-         concepto.id === id ? { ...concepto, [field]: value } : concepto
-       ));
-     };
+      setConceptos(prev =>
+        prev.map(c =>
+          c.id === id ? { ...c, [field]: value } : c
+        )
+      );
+    };
 
        /*const handleRemoveConcepto = (id) => {
          if (conceptos.length > 1) {
@@ -189,7 +227,7 @@ const EditarCotizacion = () => {
           }
         
           const subtotal = conceptos.reduce((acc, curr) => {
-            const precio = parseFloat(curr.precioEditable) || 0;
+            const precio = parseFloat(curr.precioFinal) || 0;
             const cantidad = parseInt(curr.cantidad, 10) || 0;
             return acc + cantidad * precio;
           }, 0);
@@ -216,18 +254,10 @@ const EditarCotizacion = () => {
         };
 
         const handleServicioChange = (conceptoId, servicioId) => {
-          // Verificar si el servicio ya está seleccionado en otro concepto
-          const servicioYaSeleccionado = conceptos.some(
-            (c) => c.servicio === servicioId && c.id !== conceptoId
-          );
-        
-          if (servicioYaSeleccionado) {
-            message.warning("Este servicio ya está seleccionado en otro concepto.");
-            return; // Evita que se agregue duplicado
-          }
         
           // Obtener el servicio seleccionado de la lista de servicios
           const servicioSeleccionado = servicios.find(servicio => servicio.id === servicioId);
+          console.log("Servicio seleccionado:", servicioSeleccionado);
         
           if (servicioSeleccionado) {
             const updatedConceptos = conceptos.map((concepto) =>
@@ -236,8 +266,9 @@ const EditarCotizacion = () => {
                     ...concepto,
                     servicio: servicioSeleccionado.id,
                     precio: servicioSeleccionado.precio || 0, // ✅ Asignamos el precio correcto
-                    precioEditable: servicioSeleccionado.precio || 0, // ✅ También en precioFinal
+                    precioFinal: servicioSeleccionado.precio || 0, // ✅ También en precioFinal
                     nombreServicio: servicioSeleccionado.nombreServicio, // ✅ Mantenemos el nombre
+                    metodoCodigo: servicioSeleccionado.metodos,
                   }
                 : concepto
             );
@@ -249,7 +280,7 @@ const EditarCotizacion = () => {
         
         
         
-
+/*
      const obtenerServiciosDisponibles = (conceptoId) => {
       const serviciosSeleccionados = conceptos
         .filter((c) => c.id !== conceptoId) // Excluye el concepto actual para permitir cambiarlo
@@ -263,10 +294,13 @@ const EditarCotizacion = () => {
           (servicio) => !serviciosSeleccionados.includes(servicio.id) &&
           !serviciosDeLaCotizacion.includes(servicio.id));
     };
+    
+     */
 
      const handleAddConcepto = () => {
-          setConceptos([...conceptos, { id: null, servicio: "", cantidad: 1, precio: 0, descripcion: "" }]);
-        };
+        setConceptos([...conceptos, {  id: contadorId, servicio: "", cantidad: 1, precio: 0, precioFinal:0, descripcion: "" , esNuevo: true}]);
+        setContadorId(contadorId + 1);
+      };
    
      const { subtotal, descuentoValor, subtotalConDescuento, iva, total } = calcularTotales();
    
@@ -321,11 +355,13 @@ const EditarCotizacion = () => {
           const servicioId = parseInt(concepto.servicio, 10);
           const servicioYaEnCotizacion = idsServiciosEnCotizacion.includes(servicioId);
     
-          if (concepto.id) {
-            serviciosExistentes.push(concepto);
-          } else {
-            nuevosServicios.push(concepto);
-          }
+
+            if (concepto.esNuevo) {
+              nuevosServicios.push(concepto);
+            } else {
+              serviciosExistentes.push(concepto);
+            }
+
         });
     
         // Actualizar los servicios existentes
@@ -337,7 +373,7 @@ const EditarCotizacion = () => {
           const data = {
             id: concepto.id,
             cantidad: parseInt(concepto.cantidad, 10),
-            precio: parseFloat(concepto.precioEditable),
+            precio: parseFloat(concepto.precioFinal),
             servicio: parseInt(concepto.servicio, 10),
             descripcion: concepto.descripcion,
             cotizacion: parseInt(id, 10),
@@ -364,11 +400,12 @@ const EditarCotizacion = () => {
           const createServiciosPromises = nuevosServicios.map((concepto) => {
             const data = {
               cantidad: parseInt(concepto.cantidad, 10),
-              precio: parseFloat(concepto.precioEditable),
+              precio: parseFloat(concepto.precioFinal),
               servicio: parseInt(concepto.servicio, 10),
               descripcion: concepto.descripcion,
               cotizacion: parseInt(id, 10),
             };
+            //console.log("📤 Enviando nuevo servicio:", data);
             return createCotizacionServicio(data);
           });
           const createServiciosResults = await Promise.allSettled(createServiciosPromises);
@@ -464,109 +501,148 @@ const EditarCotizacion = () => {
                    </Form.Item>
            
                    <Divider>Agregar Conceptos</Divider>
-                   {conceptos.map((concepto, index) => (
-                     <div key={index +1}><Card>
-                       <h3>Concepto {concepto.id}</h3>
-                       <Row justify="end">
-                         <div >
-                           <Checkbox checked={concepto.eliminar || false}
-                           onChange={(e) => handleToggleEliminar(concepto.id, e.target.checked)}>
-                             Eliminar
-                           </Checkbox>
-                         </div>
-                       </Row>
-                       <Row gutter={16}>
-                         <Col span={12}>
-                         <Form.Item
-                            label="Servicio"
-                            rules={[{ required: true, message: 'Por favor selecciona el servicio.' }]}
-                          >
+                    {conceptos.map((concepto, index) => (
+                      <Card key={concepto.id} style={{ marginBottom: "24px", borderRadius: 12 }}>
+                        <Row justify="space-between" align="middle" style={{ marginBottom: "10px" }}>
+                          <Col>
+                            <h3 style={{ margin: 0 }}>🧾 Concepto {concepto.id.toString().slice(-2)}</h3>
+                          </Col>
+                          <Col>
+                            <Checkbox
+                              checked={concepto.eliminar || false}
+                              onChange={(e) => handleToggleEliminar(concepto.id, e.target.checked)}
+                            >
+                              Eliminar
+                            </Checkbox>
+                          </Col>
+                        </Row>
+
+                        <Row gutter={24}>
+                          <Col span={8}>
+                            <Form.Item
+                              label="Servicio"
+                              rules={[{ required: true, message: 'Por favor selecciona el servicio.' }]}
+                            >
+                              <Select
+                                placeholder="Selecciona un servicio"
+                                showSearch
+                                optionFilterProp="label"
+                                value={concepto.servicio || undefined}
+                                onChange={(value) => handleServicioChange(concepto.id, value)}
+                                filterOption={(input, option) =>
+                                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                                }
+                                filterSort={(a, b) =>
+                                  (a?.label ?? '').toLowerCase().localeCompare((b?.label ?? '').toLowerCase())
+                                }
+                              >
+                                {servicios.map((servicio) => (
+                                  <Select.Option
+                                    key={servicio.id}
+                                    value={servicio.id}
+                                    label={servicio.nombreServicio}
+                                  >
+                                    {servicio.nombreServicio}
+                                  </Select.Option>
+                                ))}
+                              </Select>
+                            </Form.Item>
+                          </Col>
+                          <Col span={8}>
+                          <Form.Item label="Método Relacionado">
                             <Select
-                              placeholder="Selecciona un servicio"
+                              value={concepto.metodoCodigo}
+                              disabled
                               showSearch
                               optionFilterProp="label"
-                              filterOption={(input, option) =>
-                                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                              }
-                              filterSort={(optionA, optionB) =>
-                                (optionA?.label ?? '').toLowerCase().localeCompare(
-                                  (optionB?.label ?? '').toLowerCase()
-                                )
-                              }
-                              value={concepto.nombreServicio || undefined}
-                              onChange={(value) => handleServicioChange(concepto.id, value)}
                             >
-                              {obtenerServiciosDisponibles(concepto.id).map((servicio) => (
+                              {metodosData.map(m => (
                                 <Select.Option
-                                  key={servicio.id}
-                                  value={servicio.id}
-                                  label={servicio.nombreServicio}
+                                  key={m.id}
+                                  value={m.id}
+                                  label={`${m.codigo}`}
                                 >
-                                  {servicio.nombreServicio}
+                                  {`${m.codigo}`}
                                 </Select.Option>
                               ))}
                             </Select>
                           </Form.Item>
+                          </Col>
 
-                         </Col>
-                         <Col span={12}>
-                           <Form.Item label="Cantidad de servicios" rules={[{ required: true, message: 'Por favor ingresa la cantidad.' }]}>
-                             <InputNumber
-                               //type="number"
-                               min="1"
-                               value={concepto.cantidad}
-                               onChange={(value) => handleInputChange(concepto.id, "cantidad", value)}
-                             />
-                           </Form.Item>
-                         </Col>
-                       </Row>
-                       <Row gutter={16}>
-                         <Col span={12}>
-                           <Form.Item label="Precio sugerido" rules={[{ required: true, message: 'Por favor ingresa el precio.' }]}>
-                             <InputNumber
-                               disabled={true}
-                               //type="number"
-                               min="0"
-                               value={concepto.precio}
-                             />
-                           </Form.Item>
-                         </Col>
-                         <Col span={12}>
-                         <Form.Item label="Descripción">
-                              <TextArea
-                              rows={2}
-                              value={concepto.descripcion || ""}
-                              onChange={(e) => handleInputChange(concepto.id, "descripcion", e.target.value)}
-                              placeholder="Descripción del servicio"
+                          <Col span={8}>
+                            <Form.Item
+                              label="Cantidad de servicios"
+                              rules={[{ required: true, message: 'Por favor ingresa la cantidad.' }]}
+                            >
+                              <Input
+                                min={1}
+                                style={{ width: "100%" }}
+                                value={concepto.cantidad}
+                                onChange={(e) => handleInputChange(concepto.id, "cantidad", e.target.value)}
                               />
-                              </Form.Item>
-                         </Col>
-                       </Row>
-                       <Row gutter={16}>
-                         <Col span={12}>
-                           <Form.Item label="Precio final" rules={[{ required: true, message: 'Por favor ingresa el precio.' }]}>
-                             <InputNumber
-                               //type="number"
-                               min="0"
-                               value={concepto.precioEditable}
-                               onChange={(value) => handleInputChange(concepto.id, "precioEditable", value)}
-                             />
-                           </Form.Item>
-                         </Col>
-                       </Row>
-                     </Card></div>
-                   ))}
-                    <Button type="primary" onClick={handleAddConcepto} style={{ marginBottom: "16px" }}>
-                     Añadir Concepto
-                   </Button>
-           
+                            </Form.Item>
+                          </Col>
+
+                          <Col span={8}>
+                            <Form.Item
+                              label="Precio sugerido"
+                              rules={[{ required: true, message: 'Por favor ingresa el precio.' }]}
+                            >
+                              <Input
+                                disabled
+                                value={concepto.precio}
+                                style={{ width: "100%" }}
+                              />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+
+                        <Row gutter={24}>
+                          <Col span={8}>
+                            <Form.Item
+                              label="Precio final"
+                              rules={[{ required: true, message: 'Por favor ingresa el precio.' }]}
+                            >
+                              <InputNumber
+                                min={0}
+                                style={{ width: "100%" }}
+                                value={concepto.precioFinal}
+                                onChange={(e) => handleInputChange(concepto.id, "precioFinal", e)}
+                              />
+                            </Form.Item>
+                          </Col>
+
+                          <Col span={16}>
+                            <Form.Item
+                              label="Descripción"
+                              rules={[{ required: true, message: 'Por favor ingresa la descripción.' }]}
+                            >
+                              <TextArea
+                                rows={2}
+                                value={concepto.descripcion || ""}
+                                onChange={(e) => handleInputChange(concepto.id, "descripcion", e.target.value)}
+                                placeholder="Descripción del servicio"
+                              />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+                      </Card>
+                    ))}
+
+                    <Button
+                      type="primary"
+                      onClick={handleAddConcepto}
+                      style={{ marginBottom: "16px", borderRadius: 8 }}
+                    >
+                      ➕ Añadir Concepto
+                    </Button>
                    <div className="cotizacion-totals-buttons">
                      <div className="cotizacion-totals">
-                       <p>Subtotal: {subtotal.toFixed(2)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
-                       <p>Descuento ({descuento}%): {descuentoValor.toFixed(2)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
-                       <p>Subtotal con descuento: {subtotalConDescuento.toFixed(2)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
+                       <p>Subtotal: {subtotal.toFixed(3)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
+                       <p>Descuento ({descuento}%): {descuentoValor.toFixed(3)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
+                       <p>Subtotal con descuento: {subtotalConDescuento.toFixed(3)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
                        <p>IVA ({ivasData.find(iva => iva.id === ivaSeleccionado)?.porcentaje || 16}%): {iva.toFixed(2)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
-                       <p>Total: {total.toFixed(2)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
+                       <p>Total: {total.toFixed(3)} {tipoMonedaSeleccionada === 2 ? "USD" : "MXN"}</p>
                      </div>
                      <div className="cotizacion-action-buttons">
                     <Button type="primary" onClick={handleSubmit}>
@@ -579,8 +655,8 @@ const EditarCotizacion = () => {
          <Modal
            title="Información"
            open={isModalVisible}
-           onOk={() => navigate(`/detalles_cotizaciones/${id}/`)}
-           onCancel={() => navigate(`/detalles_cotizaciones/${id}/`)}
+           onOk={() => navigate(`/detalles_cotizaciones/${cifrarId(id)}/`)}
+           onCancel={() => navigate(`/detalles_cotizaciones/${cifrarId(id)}/`)}
            okText="Cerrar"
          >
            <Result status="success" title="¡Se actualizó exitosamente!" />

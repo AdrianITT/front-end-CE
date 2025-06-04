@@ -16,7 +16,7 @@ const EditEmpresaModal = ({ visible, onCancel, onEdit, regimenFiscal, empresa,us
         regimenFiscal: empresa.regimenFiscal,
         condicionPago: empresa.condicionPago,
         calle: empresa.calle,
-        numero: empresa.numero,
+        numeroExterior: empresa.numeroExterior,
         colonia: empresa.colonia,
         ciudad: empresa.ciudad,
         codigoPostal: empresa.codigoPostal,
@@ -67,7 +67,10 @@ const EditEmpresaModal = ({ visible, onCancel, onEdit, regimenFiscal, empresa,us
             <Form.Item
               label="RFC"
               name="rfc"
-              rules={[{ required: true, message: 'RFC requerido' }]}
+              rules={[{ required: true, message: 'RFC requerido' },
+                { min: 11, message: 'Debe tener 11 caracteres' },
+
+              ]}
             >
               <Input />
             </Form.Item>
@@ -136,9 +139,10 @@ const EditEmpresaModal = ({ visible, onCancel, onEdit, regimenFiscal, empresa,us
               <Input />
             </Form.Item>
             <Form.Item
-              label="Numero:"
-              name="numero"
-              rules={[{ required: true, message: 'Número requerido' }]}
+              label="Numero Exterios/Interior:"
+              name="numeroExterior"
+              rules={[{ required: true, message: 'Número requerido' },
+              ]}
             >
               <Input />
             </Form.Item>
@@ -159,7 +163,10 @@ const EditEmpresaModal = ({ visible, onCancel, onEdit, regimenFiscal, empresa,us
             <Form.Item
               label="Codigo Postal:"
               name="codigoPostal"
-              rules={[{ required: true, message: 'Código postal requerido' }]}
+              rules={[{ required: true, message: 'Código postal requerido' },
+                { len: 5, message: 'Debe tener 5 caracteres' },
+                { pattern: /^\d+$/, message: 'Sólo dígitos permitidos' },
+              ]}
             >
               <Input />
             </Form.Item>
